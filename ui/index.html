@@ -21,7 +21,7 @@
   </header>
 
   <nav class="row">
-    <input id="prefix" style="flex:1" placeholder="pub/ or priv/team-a/" />
+    <input id="prefix" style="flex:1" placeholder="pub" />
     <button id="listBtn">List</button>
   </nav>
 
@@ -67,7 +67,6 @@ function authHeaders() {
 
 function normPrefix(p) {
   if (!p) return p;
-  // force trailing slash; prevent mixing of prefixes
   if (!p.endsWith('/')) p += '/';
   return p;
 }
@@ -104,14 +103,14 @@ ${body}`, false);
       const rel = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
       const getHref = isPub ? `${API}/pub/${encodeURIComponent(rel)}` : `${API}/priv/${encodeURIComponent(rel)}`;
-      const a = `<a href="${getHref}" ${isPub ? '' : 'target="_blank"'}>GET</a>`;
-      const del = `<button data-key="${o.key}">DEL</button>`;
+      const a = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
+      const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`; // only show delete for priv
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a} ${del}</td>`;
+      tr.innerHTML = `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a}${del}</td>`;
       rows.appendChild(tr);
     }
 
-    // Wire delete buttons
+    // Wire delete buttons (restricted only)
     document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
       const key = btn.getAttribute('data-key');
       if (!confirm('Delete ' + key + '?')) return;
@@ -129,7 +128,6 @@ $('uploadBtn').onclick = async () => {
   const file = $('fileInput').files[0];
   const target = $('uploadPath').value.trim();
   if (!file || !target) { alert('Pick file and target path'); return; }
-  // Expecting a priv/* key
   const rel = target.startsWith('priv/') ? target.slice('priv/'.length) : target;
   try {
     const res = await fetch(`${API}/priv/${encodeURIComponent(rel)}`, {
