@@ -6,14 +6,14 @@
 <title>nock files</title>
 <style>
   /* ultra-stark */
-  body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:800px; color:#111; background:#fff; }
+  body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:900px; color:#111; background:#fff; }
   h2 { margin:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   input, button { font:inherit; border:1px solid #ccc; padding:4px 6px; background:#fff; color:#111; }
   input[type=file]{ padding:0; }
   #msg { font-size:13px; margin:4px 0 10px; white-space:pre-wrap; color:#444; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { border-bottom:1px solid #ddd; padding:4px 6px; text-align:left; }
+  th, td { border-bottom:1px solid #ddd; padding:6px 6px; text-align:left; }
   td.name { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   td.size, td.time { white-space:nowrap; }
   td.actions a { color:#06c; text-decoration:none; }
@@ -21,10 +21,8 @@
   footer { margin-top:12px; font-size:12px; color:#666; }
   .hidden { display:none; }
   .invalid { outline:1px solid #c33; }
-  /* prefix chips */
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
-  .chip { border:1px solid #ccc; padding:4px 8px; border-radius:999px; background:#fafafa; cursor:pointer; }
-  .chip:hover { background:#f2f2f2; }
+  .meta { font-size:13px; color:#444; margin:8px 0 12px; }
+  .meta code { background:#f7f7f7; padding:2px 4px; border:1px solid #e5e5e5; }
 </style>
 </head>
 <body>
@@ -41,21 +39,13 @@
 
 <!-- APP -->
 <section id="app" class="hidden">
-  <div class="row">
-    <input id="prefix" style="flex:1" placeholder="pub" />
-    <button id="listBtn">List</button>
-  </div>
-
-  <div id="chipsWrap" class="hidden">
-    <strong>Writable:</strong>
-    <div id="chips" class="chips"></div>
-  </div>
+  <div id="meta" class="meta"></div>
 
   <section>
     <details open>
       <summary>Upload</summary>
       <div class="row" style="margin-top:4px">
-        <input id="uploadPath" style="flex:1" placeholder="priv/team-a/file.txt" />
+        <input id="uploadPath" style="flex:1" placeholder="priv/…/file.txt" />
         <input id="fileInput" type="file" />
         <button id="uploadBtn">PUT</button>
       </div>
@@ -63,12 +53,12 @@
   </section>
 
   <section>
-    <h4>Contents</h4>
+    <h4>All files you can read</h4>
     <div id="msg"></div>
     <table>
       <thead>
         <tr>
-          <th class="name">Name</th>
+          <th class="name">/full/path/filename</th>
           <th class="size">Size</th>
           <th class="time">Uploaded</th>
           <th class="actions">Actions</th>
@@ -95,19 +85,85 @@ async function verifyToken(t){
   try { return await res.json(); } catch { return null; } // { roles, prefixes, writePrefixes }
 }
 
-function renderChips(prefixes){
-  const wrap = $('chipsWrap'), c = $('chips');
-  c.innerHTML = '';
-  const list = (prefixes || []);
-  if (!list.length) { wrap.classList.add('hidden'); return; }
-  wrap.classList.remove('hidden');
-  list.forEach(p => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip';
-    chip.textContent = p;
-    chip.onclick = () => { $('prefix').value = p.replace(/\/$/, ''); $('listBtn').click(); };
-    c.appendChild(chip);
+function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
+function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
+function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
+
+function canWriteKey(key, writePrefixes) {
+  return (writePrefixes || []).some(pref => key.startsWith(pref));
+}
+
+async function listAll(prefixes){
+  const reqs = (prefixes || []).map(p => {
+    const url = new URL(API + '/ls');
+    url.searchParams.set('prefix', normPrefix(p));
+    return fetch(url, { headers: authHeaders() }).then(async r => {
+      if (!r.ok) throw new Error(`ls ${p} → ${r.status}`);
+      return r.json(); // { prefix, objects }
+    });
+  });
+  const results = await Promise.all(reqs);
+  const objects = results.flatMap(r => r.objects || []);
+  // stable sort by full key
+  objects.sort((a,b) => a.key.localeCompare(b.key));
+  return objects;
+}
+
+function renderWritable(writePrefixes){
+  const el = $('meta');
+  if (!writePrefixes || !writePrefixes.length) {
+    el.textContent = 'Writable: none';
+    return;
+  }
+  el.innerHTML = `Writable: ${writePrefixes.map(p => `<code>${p}</code>`).join(' ')}`;
+  // convenience: hint the uploadPath placeholder
+  const up = $('uploadPath');
+  if (up && !up.value) up.placeholder = `${writePrefixes[0]}file.txt`;
+}
+
+function buildGetHref(key, token) {
+  if (key.startsWith('pub/')) {
+    const rel = key.slice('pub/'.length);
+    return `${API}/pub/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  }
+  if (key.startsWith('priv/')) {
+    const rel = key.slice('priv/'.length);
+    return `${API}/priv/${rel.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
+  }
+  // fallback: treat as private path fragment
+  return `${API}/priv/${key.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
+}
+
+function renderTable(objects, writePrefixes){
+  const rows = $('rows'); rows.innerHTML = '';
+  const token = getToken();
+  if (!objects.length) { setMsg('No files.'); return; }
+  setMsg('');
+  for (const o of objects) {
+    const full = o.key; // show full path
+    const href = buildGetHref(full, token);
+    const delAllowed = full.startsWith('priv/') && canWriteKey(full, writePrefixes);
+    const delBtn = delAllowed ? ` <button data-key="${full}">DEL</button>` : '';
+    rows.insertAdjacentHTML('beforeend',
+      `<tr>
+        <td class="name">${full}</td>
+        <td class="size">${o.size}</td>
+        <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
+        <td class="actions"><a href="${href}" target="${full.startsWith('priv/') ? '_blank' : ''}">GET</a>${delBtn}</td>
+      </tr>`);
+  }
+
+  // wire deletes for allowed rows only
+  document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
+    if (!confirm('Delete ' + btn.dataset.key + '?')) return;
+    const path = btn.dataset.key.replace(/^priv\//, '');
+    const enc = path.split('/').map(encodeURIComponent).join('/');
+    const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
+    if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
+    else {
+      // optimistically remove row
+      btn.closest('tr')?.remove();
+    }
   });
 }
 
@@ -117,12 +173,16 @@ async function enterWithToken(t){
   setToken(t);
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
-  renderChips(info.writePrefixes || []);
-  // Auto-list: prefer first writable, else first readable
-  const first = (info.writePrefixes && info.writePrefixes[0]) || (info.prefixes && info.prefixes[0]);
-  if (first) {
-    $('prefix').value = first.replace(/\/$/, '');
-    $('listBtn').click();
+
+  // show writable list
+  renderWritable(info.writePrefixes || []);
+
+  // fetch all readable prefixes, flat
+  try {
+    const objs = await listAll(info.prefixes || []);
+    renderTable(objs, info.writePrefixes || []);
+  } catch (e) {
+    setMsg('List error: ' + (e?.message || e), false);
   }
   return true;
 }
@@ -135,64 +195,10 @@ $('gateBtn').onclick = async () => {
 };
 
 // auto-try saved token
-(async () => { const saved = getToken(); if (saved) await enterWithToken(saved); })();
-
-/* ---------- helpers ---------- */
-function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
-function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
-function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
-
-/* ---------- list (flat/recursive) ---------- */
-$('listBtn').onclick = async () => {
-  let prefix = normPrefix($('prefix').value.trim());
-  if (!prefix) { alert('Enter a prefix'); return; }
-  try {
-    const url = new URL(API + '/ls');
-    url.searchParams.set('prefix', prefix);
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) { setMsg(`List failed (${res.status}):\n${await res.text()}`, false); return; }
-    const data = await res.json(); // { prefix, objects }
-    const rows = $('rows'); rows.innerHTML = '';
-    if (!data.objects || data.objects.length === 0) { setMsg('No files.'); return; }
-    setMsg('');
-
-    for (const o of data.objects) {
-      // Show relative name for readability
-      const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
-      const isPub = prefix.startsWith('pub/');
-      const token = getToken();
-
-      // Download: keep full priv path; strip leading 'priv/' for API route
-      const dlKey = isPub ? rel : o.key.replace(/^priv\//, '');
-      const encDlKey = dlKey.split('/').map(encodeURIComponent).join('/');
-
-      const getHref = isPub
-        ? `${API}/pub/${encDlKey}`
-        : `${API}/priv/${encDlKey}?key=${encodeURIComponent(token)}`;
-
-      const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank"'}>GET</a>`;
-      const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`;
-
-      rows.insertAdjacentHTML('beforeend',
-        `<tr>
-          <td class="name">${rel}</td>
-          <td class="size">${o.size}</td>
-          <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
-          <td class="actions">${a}${del}</td>
-        </tr>`);
-    }
-
-    // delete (priv only)
-    document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
-      if (!confirm('Delete ' + btn.dataset.key + '?')) return;
-      const path = btn.dataset.key.replace(/^priv\//, '');
-      const enc = path.split('/').map(encodeURIComponent).join('/');
-      const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
-      if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
-      else $('listBtn').click();
-    });
-  } catch(e) { setMsg('List error: ' + (e?.message || e), false); }
-};
+(async () => {
+  const saved = getToken();
+  if (saved) await enterWithToken(saved);
+})();
 
 /* ---------- upload ---------- */
 $('uploadBtn').onclick = async () => {
