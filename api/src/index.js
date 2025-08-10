@@ -45,10 +45,7 @@ function ruleForKey(policy, key) {
 }
 
 function isAnonymousRead(readField) {
-  if (typeof readField === 'string') {
-    return readField.toLowerCase() === 'anonymous';
-  }
-  return false;
+  return typeof readField === 'string' && readField.toLowerCase() === 'anonymous';
 }
 
 async function canRead(env, policy, key, token) {
@@ -97,6 +94,18 @@ function text(msg, status = 400) {
   return new Response(msg, { status });
 }
 
+// Compute which policy prefixes a role set can read (read or write ⇒ read)
+function visiblePrefixesFor(policy, rolesSet) {
+  const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
+  const out = [];
+  for (const dir of policy.directories || []) {
+    if (isAnonymousRead(dir.read) || has(dir.read) || has(dir.write)) {
+      out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
+    }
+  }
+  return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
+}
+
 export default {
   async fetch(req, env) {
     // CORS preflight
@@ -109,8 +118,18 @@ export default {
     const token = getToken(req);
     const policy = await loadPolicy(env);
 
+    // health
     if (path === 'health') return withCors(req, text('ok', 200));
 
+    // auth/verify (top-level)
+    if (req.method === 'GET' && path === 'auth/verify') {
+      const roles = await rolesForToken(env, token);
+      if (!roles.size) return withCors(req, text('Unauthorized', 401));
+      const prefixes = visiblePrefixesFor(policy, roles);
+      return withCors(req, json({ roles: [...roles], prefixes }, 200));
+    }
+
+    // list
     if (req.method === 'GET' && path === 'ls') {
       let prefix = url.searchParams.get('prefix') || '';
       if (!prefix) return withCors(req, text('Missing prefix', 400));
@@ -128,6 +147,7 @@ export default {
       );
     }
 
+    // pub/*
     if (req.method === 'GET' && path.startsWith('pub/')) {
       const raw = path.slice(4);
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
@@ -139,18 +159,12 @@ export default {
       return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
     }
 
+    // priv/*
     if (path.startsWith('priv/')) {
       const raw = path.slice(5);
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
       const key = env.RESTRICTED_PREFIX + rel;
 
-      if (req.method === 'GET' && path === 'auth/verify') {
-        const roles = await rolesForToken(env, token);
-        if (!roles.size) {
-          return withCors(req, text('Unauthorized', 401));
-        }
-        return withCors(req, json({ roles: [...roles] }, 200));
-      }
       if (req.method === 'GET') {
         if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const obj = await env.FILES.get(key);
