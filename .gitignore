@@ -1,6 +1,8 @@
-docs/**
-scripts/**
+.env
+.wrangler/
+
+docs/
+
+node_modules/
+
 package*
-*/.wrangler/**
-*/node_modules/**
-node_modules/**
