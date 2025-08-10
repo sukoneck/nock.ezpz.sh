@@ -1,6 +1,7 @@
 name = "nock-ezpz-api"
 main = "src/index.js"
-compatibility_date = "2024-05-29"
+compatibility_date = "2025-08-10"
+workers_dev = false
 
 routes = [ { pattern = "api.nock.ezpz.sh/*", zone_name = "ezpz.sh" } ]
 
@@ -13,7 +14,6 @@ binding = "AUTH"
 id = "bfb2b2405536457f9d54c2a2993cb0aa"
 
 [vars]
-SITE_PREFIX = "site/"
 PUBLIC_PREFIX = "public/"
 RESTRICTED_PREFIX = "restricted/"
 POLICY_KEY = "config/policy.json"
