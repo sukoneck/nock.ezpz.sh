@@ -6,12 +6,12 @@
 <title>nock files</title>
 <style>
   /* ultra-stark */
-  body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:800px; }
+  body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:800px; color:#111; background:#fff; }
   h2 { margin:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
-  input, button { font:inherit; border:1px solid #ccc; padding:4px 6px; }
+  input, button { font:inherit; border:1px solid #ccc; padding:4px 6px; background:#fff; color:#111; }
   input[type=file]{ padding:0; }
-  #msg { font-size:13px; margin:4px 0 10px; white-space:pre-wrap; }
+  #msg { font-size:13px; margin:4px 0 10px; white-space:pre-wrap; color:#444; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { border-bottom:1px solid #ddd; padding:4px 6px; text-align:left; }
   td.name { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
@@ -21,35 +21,35 @@
   footer { margin-top:12px; font-size:12px; color:#666; }
   .hidden { display:none; }
   .invalid { outline:1px solid #c33; }
-  @media (prefers-color-scheme: dark){
-    body{ background:#000; color:#eee; }
-    input,button{ background:#000; color:#eee; border-color:#555; }
-    th,td{ border-color:#333; }
-    td.actions a{ color:#7fb3ff; }
-    footer{ color:#aaa; }
-  }
+  /* prefix chips */
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
+  .chip { border:1px solid #ccc; padding:4px 8px; border-radius:999px; background:#fafafa; cursor:pointer; }
+  .chip:hover { background:#f2f2f2; }
 </style>
 </head>
 <body>
 
-<!-- SOFT GATE: shown first; only token field visible -->
+<!-- SOFT GATE -->
 <section id="gate">
-  <div class="row">
-    <h2 style="flex:1">nock files</h2>
-  </div>
+  <div class="row"><h2 style="flex:1">nock files</h2></div>
   <div class="row">
     <input id="gateToken" type="password" placeholder="token" style="flex:1" />
     <button id="gateBtn">Enter</button>
   </div>
-  <div id="gateMsg" style="font-size:13px;color:#666;margin-top:6px;"></div>
+  <div id="gateMsg" style="font-size:13px;margin-top:6px;"></div>
 </section>
 
-<!-- APP: hidden until token verifies -->
+<!-- APP -->
 <section id="app" class="hidden">
-  <nav class="row">
+  <div class="row">
     <input id="prefix" style="flex:1" placeholder="pub" />
     <button id="listBtn">List</button>
-  </nav>
+  </div>
+
+  <div>
+    <strong>Available:</strong>
+    <div id="chips" class="chips"></div>
+  </div>
 
   <section>
     <details open>
@@ -78,9 +78,7 @@
     </table>
   </section>
 
-  <footer>
-    API: <code>https://api.nock.ezpz.sh</code>
-  </footer>
+  <footer>API: <code>https://api.nock.ezpz.sh</code></footer>
 </section>
 
 <script>
@@ -88,21 +86,38 @@ const API = 'https://api.nock.ezpz.sh';
 const $ = id => document.getElementById(id);
 
 /* ---------- token + gate ---------- */
-function getToken(){ return (localStorage.getItem('token') || '').trim(); }
-function setToken(t){ localStorage.setItem('token', (t||'').trim()); }
+const getToken = () => (localStorage.getItem('token') || '').trim();
+const setToken = (t) => localStorage.setItem('token', (t||'').trim());
 
 async function verifyToken(t){
   const res = await fetch(`${API}/auth/verify`, { headers: t ? { Authorization: 'Bearer ' + t } : {} });
   if (!res.ok) return null;
-  try { const data = await res.json(); return data.roles || []; } catch { return null; }
+  try { return await res.json(); } catch { return null; } // { roles, prefixes }
+}
+
+function renderChips(prefixes){
+  const c = $('chips'); c.innerHTML = '';
+  (prefixes || []).forEach(p => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = p;
+    chip.onclick = () => { $('prefix').value = p.replace(/\/$/, ''); $('listBtn').click(); };
+    c.appendChild(chip);
+  });
 }
 
 async function enterWithToken(t){
-  const roles = await verifyToken(t);
-  if (!roles) return false;
+  const info = await verifyToken(t);
+  if (!info) return false;
   setToken(t);
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
+  renderChips(info.prefixes || []);
+  if (info.prefixes && info.prefixes.length) {
+    $('prefix').value = info.prefixes[0].replace(/\/$/, '');
+    $('listBtn').click();
+  }
   return true;
 }
 
@@ -114,15 +129,12 @@ $('gateBtn').onclick = async () => {
 };
 
 // auto-try saved token
-(async () => {
-  const saved = getToken();
-  if (saved) await enterWithToken(saved);
-})();
+(async () => { const saved = getToken(); if (saved) await enterWithToken(saved); })();
 
-/* ---------- app helpers ---------- */
+/* ---------- helpers ---------- */
 function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
 function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
-function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '' : '#c33'; }
+function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
 
 /* ---------- list ---------- */
 $('listBtn').onclick = async () => {
@@ -146,11 +158,8 @@ $('listBtn').onclick = async () => {
       const isPub = prefix.startsWith('pub/');
       const token = getToken();
 
-      // For download: preserve full key for priv (don't drop path parts)
-      const dlKey = isPub
-        ? rel // public: rel is fine
-        : o.key.replace(/^priv\//, ''); // private: keep full path after 'priv/'
-
+      // download key: keep full priv path; strip leading 'priv/' for API route
+      const dlKey = isPub ? rel : o.key.replace(/^priv\//, '');
       const encDlKey = dlKey.split('/').map(encodeURIComponent).join('/');
 
       const getHref = isPub
