@@ -46,8 +46,8 @@
     <button id="listBtn">List</button>
   </div>
 
-  <div>
-    <strong>Available:</strong>
+  <div id="chipsWrap" class="hidden">
+    <strong>Writable:</strong>
     <div id="chips" class="chips"></div>
   </div>
 
@@ -92,12 +92,16 @@ const setToken = (t) => localStorage.setItem('token', (t||'').trim());
 async function verifyToken(t){
   const res = await fetch(`${API}/auth/verify`, { headers: t ? { Authorization: 'Bearer ' + t } : {} });
   if (!res.ok) return null;
-  try { return await res.json(); } catch { return null; } // { roles, prefixes }
+  try { return await res.json(); } catch { return null; } // { roles, prefixes, writePrefixes }
 }
 
 function renderChips(prefixes){
-  const c = $('chips'); c.innerHTML = '';
-  (prefixes || []).forEach(p => {
+  const wrap = $('chipsWrap'), c = $('chips');
+  c.innerHTML = '';
+  const list = (prefixes || []);
+  if (!list.length) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  list.forEach(p => {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'chip';
@@ -113,9 +117,11 @@ async function enterWithToken(t){
   setToken(t);
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
-  renderChips(info.prefixes || []);
-  if (info.prefixes && info.prefixes.length) {
-    $('prefix').value = info.prefixes[0].replace(/\/$/, '');
+  renderChips(info.writePrefixes || []);
+  // Auto-list: prefer first writable, else first readable
+  const first = (info.writePrefixes && info.writePrefixes[0]) || (info.prefixes && info.prefixes[0]);
+  if (first) {
+    $('prefix').value = first.replace(/\/$/, '');
     $('listBtn').click();
   }
   return true;
@@ -136,7 +142,7 @@ function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer 
 function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
 function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
 
-/* ---------- list ---------- */
+/* ---------- list (flat/recursive) ---------- */
 $('listBtn').onclick = async () => {
   let prefix = normPrefix($('prefix').value.trim());
   if (!prefix) { alert('Enter a prefix'); return; }
@@ -145,20 +151,18 @@ $('listBtn').onclick = async () => {
     url.searchParams.set('prefix', prefix);
     const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) { setMsg(`List failed (${res.status}):\n${await res.text()}`, false); return; }
-    const data = await res.json();
-    const rows = $('rows'); rows.innerHTML = ''; setMsg('');
-
-    for (const d of data.directories) {
-      rows.insertAdjacentHTML('beforeend',
-        `<tr><td class="name"><strong>${d}</strong></td><td></td><td></td><td></td></tr>`);
-    }
+    const data = await res.json(); // { prefix, objects }
+    const rows = $('rows'); rows.innerHTML = '';
+    if (!data.objects || data.objects.length === 0) { setMsg('No files.'); return; }
+    setMsg('');
 
     for (const o of data.objects) {
-      const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key; // display only
+      // Show relative name for readability
+      const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
       const token = getToken();
 
-      // download key: keep full priv path; strip leading 'priv/' for API route
+      // Download: keep full priv path; strip leading 'priv/' for API route
       const dlKey = isPub ? rel : o.key.replace(/^priv\//, '');
       const encDlKey = dlKey.split('/').map(encodeURIComponent).join('/');
 
@@ -170,7 +174,12 @@ $('listBtn').onclick = async () => {
       const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`;
 
       rows.insertAdjacentHTML('beforeend',
-        `<tr><td class="name">${rel}</td><td class="size">${o.size}</td><td class="time">${new Date(o.uploaded).toLocaleString()}</td><td class="actions">${a}${del}</td></tr>`);
+        `<tr>
+          <td class="name">${rel}</td>
+          <td class="size">${o.size}</td>
+          <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
+          <td class="actions">${a}${del}</td>
+        </tr>`);
     }
 
     // delete (priv only)

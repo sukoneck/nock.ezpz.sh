@@ -118,6 +118,15 @@ function visiblePrefixesFor(policy, rolesSet) {
   return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
 }
 
+function writablePrefixesFor(policy, rolesSet) {
+  const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
+  const out = [];
+  for (const dir of policy.directories || []) {
+    if (has(dir.write)) out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
+  }
+  return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
+}
+
 export default {
   async fetch(req, env) {
     // CORS preflight
@@ -133,29 +142,32 @@ export default {
     // healthz
     if (path === 'healthz') return withCors(req, text('OK', 200));
 
+    // auth
     if (req.method === 'GET' && path === 'auth/verify') {
       const roles = await rolesForToken(env, token);
       if (!roles.size) return withCors(req, text('Unauthorized', 401));
       const prefixes = visiblePrefixesFor(policy, roles);
-      return withCors(req, json({ roles: [...roles], prefixes }, 200));
+      const writePrefixes = writablePrefixesFor(policy, roles);
+      return withCors(req, json({ roles: [...roles], prefixes, writePrefixes }, 200));
     }
 
     // list
     if (req.method === 'GET' && path === 'ls') {
       let prefix = url.searchParams.get('prefix') || '';
-      if (!prefix) return withCors(req, text('Missing prefix', 400));
-      if (!prefix.endsWith('/')) prefix += '/'; // normalize
       const allowed = await canRead(env, policy, prefix, token);
       if (!allowed) return withCors(req, text('Unauthorized', 401));
-      const list = await env.FILES.list({ prefix, delimiter: '/' });
-      return withCors(
-        req,
-        json({
-          prefix,
-          directories: list.delimitedPrefixes,
-          objects: list.objects.map((o) => ({ key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag })),
-        }, 200, cacheHeaders(parseInt(env.CACHE_SECONDS || '0', 10)))
-      );
+
+      let objects = [];
+      let cursor;
+      do {
+        const list = await env.FILES.list({ prefix, cursor }); // no delimiter
+        objects.push(...list.objects.map(o => ({
+          key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag
+        })));
+        cursor = list.cursor;
+      } while (cursor);
+
+      return withCors(req, json({ prefix, objects }, 200));
     }
 
     // pub/*
