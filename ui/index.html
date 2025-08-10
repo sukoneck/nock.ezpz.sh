@@ -90,11 +90,13 @@ const $ = id => document.getElementById(id);
 /* ---------- token + gate ---------- */
 function getToken(){ return (localStorage.getItem('token') || '').trim(); }
 function setToken(t){ localStorage.setItem('token', (t||'').trim()); }
+
 async function verifyToken(t){
   const res = await fetch(`${API}/auth/verify`, { headers: t ? { Authorization: 'Bearer ' + t } : {} });
   if (!res.ok) return null;
   try { const data = await res.json(); return data.roles || []; } catch { return null; }
 }
+
 async function enterWithToken(t){
   const roles = await verifyToken(t);
   if (!roles) return false;
@@ -103,12 +105,14 @@ async function enterWithToken(t){
   $('app').classList.remove('hidden');
   return true;
 }
+
 $('gateBtn').onclick = async () => {
   const t = $('gateToken').value.trim();
   const ok = await enterWithToken(t);
   $('gateToken').classList.toggle('invalid', !ok);
   $('gateMsg').textContent = ok ? '' : 'Invalid token';
 };
+
 // auto-try saved token
 (async () => {
   const saved = getToken();
@@ -136,14 +140,26 @@ $('listBtn').onclick = async () => {
       rows.insertAdjacentHTML('beforeend',
         `<tr><td class="name"><strong>${d}</strong></td><td></td><td></td><td></td></tr>`);
     }
+
     for (const o of data.objects) {
-      const rel = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
+      const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key; // display only
       const isPub = prefix.startsWith('pub/');
-      const encRel = rel.split('/').map(encodeURIComponent).join('/');
       const token = getToken();
-      const getHref = isPub ? `${API}/pub/${encRel}` : `${API}/priv/${encRel}?key=${encodeURIComponent(token)}`;
-      const a = `<a href="${getHref}" ${isPub ? '' : 'target="_blank"'}>GET</a>`;
+
+      // For download: preserve full key for priv (don't drop path parts)
+      const dlKey = isPub
+        ? rel // public: rel is fine
+        : o.key.replace(/^priv\//, ''); // private: keep full path after 'priv/'
+
+      const encDlKey = dlKey.split('/').map(encodeURIComponent).join('/');
+
+      const getHref = isPub
+        ? `${API}/pub/${encDlKey}`
+        : `${API}/priv/${encDlKey}?key=${encodeURIComponent(token)}`;
+
+      const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank"'}>GET</a>`;
       const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`;
+
       rows.insertAdjacentHTML('beforeend',
         `<tr><td class="name">${rel}</td><td class="size">${o.size}</td><td class="time">${new Date(o.uploaded).toLocaleString()}</td><td class="actions">${a}${del}</td></tr>`);
     }
@@ -153,8 +169,8 @@ $('listBtn').onclick = async () => {
       if (!confirm('Delete ' + btn.dataset.key + '?')) return;
       const path = btn.dataset.key.replace(/^priv\//, '');
       const enc = path.split('/').map(encodeURIComponent).join('/');
-      const res = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
-      if (!res.ok) setMsg('Delete failed: ' + (await res.text()), false);
+      const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
+      if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
       else $('listBtn').click();
     });
   } catch(e) { setMsg('List error: ' + (e?.message || e), false); }
