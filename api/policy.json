@@ -1,0 +1,8 @@
+{
+  "directories": [
+    { "prefix": "public/", "read": "anonymous", "write": ["SUKONECK_RW"] },
+    { "prefix": "restricted/eccojxm/", "read": [], "write": ["SUKONECK_RW","ECCOJXM_RW"] },
+    { "prefix": "restricted/hamburger/", "read": [], "write": ["SUKONECK_RW", "HAMBURGER_RW"] },
+    { "prefix": "restricted/sukoneck/", "read": [], "write": ["SUKONECK_RW"] }
+  ]
+}

@@ -1,0 +1,20 @@
+name = "nock-ezpz-api"
+main = "src/index.js"
+compatibility_date = "2024-05-29"
+
+routes = [ { pattern = "api.nock.ezpz.sh/*", zone_name = "ezpz.sh" } ]
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "files"
+
+[[kv_namespaces]]
+binding = "AUTH"
+id = "<KV_NAMESPACE_ID_FROM_CREATE>"
+
+[vars]
+SITE_PREFIX = "site/"
+PUBLIC_PREFIX = "public/"
+RESTRICTED_PREFIX = "restricted/"
+POLICY_KEY = "config/policy.json"
+CACHE_SECONDS = "60" # Useful for the website

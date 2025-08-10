@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>nock files</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    body { max-width: 1000px; margin: 2rem auto; }
+    .row { display:flex; gap:1rem; align-items:center; }
+    code { user-select: all; }
+  </style>
+</head>
+<body>
+  <header class="row">
+    <h2 style="flex:1">nock files</h2>
+    <input id="token" type="password" placeholder="optional token" />
+    <button id="saveToken">Save</button>
+  </header>
+
+  <nav class="row">
+    <input id="prefix" style="flex:1" placeholder="public/ or restricted/team-a/" />
+    <button id="listBtn">List</button>
+  </nav>
+
+  <article>
+    <details open>
+      <summary>Upload</summary>
+      <div class="row">
+        <input id="uploadPath" placeholder="restricted/team-a/file.txt" style="flex:1" />
+        <input id="fileInput" type="file" />
+        <button id="uploadBtn">PUT</button>
+      </div>
+    </details>
+  </article>
+
+  <article>
+    <h4>Contents</h4>
+    <table>
+      <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </article>
+
+  <footer>
+    <small>API: <code>https://api.nock.ezpz.sh</code></small>
+  </footer>
+
+<script>
+const API = 'https://api.nock.ezpz.sh';
+const $ = (id) => document.getElementById(id);
+
+// Token persistence
+(function() {
+  const t = localStorage.getItem('token') || '';
+  $('token').value = t;
+})();
+$('saveToken').onclick = () => localStorage.setItem('token', $('token').value.trim());
+
+function authHeaders() {
+  const t = $('token').value.trim();
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+$('listBtn').onclick = async () => {
+  const prefix = $('prefix').value.trim();
+  if (!prefix) { alert('Enter a prefix'); return; }
+  const url = new URL(API + '/ls');
+  url.searchParams.set('prefix', prefix);
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) { alert('List failed: ' + (await res.text())); return; }
+  const data = await res.json();
+  const rows = $('rows'); rows.innerHTML = '';
+  for (const d of data.directories) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><strong>${d}</strong></td><td></td><td></td><td></td>`;
+    rows.appendChild(tr);
+  }
+  for (const o of data.objects) {
+    const rel = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
+    const isPub = prefix.startsWith('public/');
+    const getHref = isPub ? `${API}/pub/${encodeURIComponent(rel)}` : `${API}/priv/${encodeURIComponent(rel)}`;
+    const a = `<a href="${getHref}" ${isPub ? '' : 'target="_blank"'}>GET</a>`;
+    const del = `<button data-key="${o.key}">DEL</button>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a} ${del}</td>`;
+    rows.appendChild(tr);
+  }
+  // Wire delete buttons
+  document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
+    const key = btn.getAttribute('data-key');
+    if (!confirm('Delete ' + key + '?')) return;
+    const path = key.startsWith('restricted/') ? key.slice('restricted/'.length) : key;
+    const res = await fetch(`${API}/priv/${encodeURIComponent(path)}`, { method:'DELETE', headers: authHeaders() });
+    if (!res.ok) alert('Delete failed: ' + (await res.text()));
+    else $('listBtn').click();
+  });
+};
+
+$('uploadBtn').onclick = async () => {
+  const file = $('fileInput').files[0];
+  const target = $('uploadPath').value.trim();
+  if (!file || !target) { alert('Pick file and target path'); return; }
+  // Expecting a restricted/* key
+  const rel = target.startsWith('restricted/') ? target.slice('restricted/'.length) : target;
+  const res = await fetch(`${API}/priv/${encodeURIComponent(rel)}`, {
+    method: 'PUT', body: file, headers: { ...authHeaders(), 'Content-Type': file.type || 'application/octet-stream' }
+  });
+  if (!res.ok) alert('Upload failed: ' + (await res.text()));
+  else alert('Uploaded');
+};
+</script>
+</body>
+</html>
