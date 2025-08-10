@@ -1,8 +1,31 @@
+function corsHeaders(req) {
+  const origin = req.headers.get('Origin');
+  const allowed = new Set(['https://nock.ezpz.sh']);
+  const h = new Headers();
+  if (origin && allowed.has(origin)) {
+    h.set('Access-Control-Allow-Origin', origin);
+    h.set('Vary', 'Origin');
+  } else {
+    // Non-browser clients (curl/wget) or unknown origin
+    h.set('Access-Control-Allow-Origin', '*');
+  }
+  h.set('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS');
+  h.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+  h.set('Access-Control-Max-Age', '86400');
+  return h;
+}
+
+function withCors(req, res) {
+  const h = corsHeaders(req);
+  for (const [k, v] of h) res.headers.set(k, v);
+  return res;
+}
+
 async function rolesForToken(env, token) {
   if (!token) return new Set();
   const value = await env.AUTH.get(token);
   if (!value) return new Set();
-  return new Set(value.split(",").map((s) => s.trim()).filter(Boolean));
+  return new Set(value.split(',').map((s) => s.trim()).filter(Boolean));
 }
 
 async function loadPolicy(env) {
@@ -21,44 +44,51 @@ function ruleForKey(policy, key) {
   return winner;
 }
 
+function isAnonymousRead(readField) {
+  if (typeof readField === 'string') {
+    return readField.toLowerCase() === 'anonymous';
+  }
+  return false;
+}
+
 async function canRead(env, policy, key, token) {
   const rule = ruleForKey(policy, key);
   if (!rule) return false;
-  if (rule.read === "ANONYMOUS") return true;
+  if (isAnonymousRead(rule.read)) return true;
   const roles = await rolesForToken(env, token);
-  return rule.read.some((role) => roles.has(role));
+  return Array.isArray(rule.read) && rule.read.some((role) => roles.has(role));
 }
 
 async function canWrite(env, policy, key, token) {
   const rule = ruleForKey(policy, key);
   if (!rule) return false;
   const roles = await rolesForToken(env, token);
-  return rule.write.some((role) => roles.has(role));
+  return Array.isArray(rule.write) && rule.write.some((role) => roles.has(role));
 }
 
 function getToken(req) {
-  const h = req.headers.get("authorization") || "";
-  const bearer = h.startsWith("Bearer ") ? h.slice(7) : h;
+  const h = req.headers.get('authorization') || '';
+  const bearer = h.startsWith('Bearer ') ? h.slice(7) : h;
   if (bearer) return bearer.trim();
-  const q = new URL(req.url).searchParams.get("key");
-  return q ? q.trim() : "";
+  const q = new URL(req.url).searchParams.get('key');
+  return q ? q.trim() : '';
 }
 
 function cacheHeaders(maxAge) {
-  return { "cache-control": `public, max-age=${maxAge}` };
+  return { 'cache-control': `public, max-age=${maxAge}` };
 }
 
 async function streamObj(obj) {
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
-  if (!headers.has("content-type")) headers.set("content-type", "application/octet-stream");
-  headers.set("etag", obj.etag);
-  headers.set("cache-control", "public, max-age=3600");
+  if (!headers.has('content-type')) headers.set('content-type', 'application/octet-stream');
+  headers.set('etag', obj.etag);
+  headers.set('cache-control', 'public, max-age=3600');
   return new Response(obj.body, { headers });
 }
 
 function json(data, status = 200, headers = {}) {
-  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
 function text(msg, status = 400) {
@@ -67,56 +97,65 @@ function text(msg, status = 400) {
 
 export default {
   async fetch(req, env) {
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      return withCors(req, new Response(null, { status: 204 }));
+    }
+
     const url = new URL(req.url);
-    const path = url.pathname.replace(/^\/+/, "");
+    const path = url.pathname.replace(/^\/+/, '');
     const token = getToken(req);
     const policy = await loadPolicy(env);
 
-    if (path === "health") return text("ok", 200);
+    if (path === 'health') return withCors(req, text('ok', 200));
 
-    if (req.method === "GET" && path === "ls") {
-      const prefix = url.searchParams.get("prefix") || "";
-      if (!prefix) return text("Missing prefix", 400);
+    if (req.method === 'GET' && path === 'ls') {
+      let prefix = url.searchParams.get('prefix') || '';
+      if (!prefix) return withCors(req, text('Missing prefix', 400));
+      if (!prefix.endsWith('/')) prefix += '/'; // normalize
       const allowed = await canRead(env, policy, prefix, token);
-      if (!allowed) return text("Unauthorized", 401);
-      const list = await env.FILES.list({ prefix, delimiter: "/" });
-      return json({
-        prefix,
-        directories: list.delimitedPrefixes,
-        objects: list.objects.map((o) => ({ key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag }))
-      }, 200, cacheHeaders(parseInt(env.CACHE_SECONDS || "0", 10)));
+      if (!allowed) return withCors(req, text('Unauthorized', 401));
+      const list = await env.FILES.list({ prefix, delimiter: '/' });
+      return withCors(
+        req,
+        json({
+          prefix,
+          directories: list.delimitedPrefixes,
+          objects: list.objects.map((o) => ({ key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag })),
+        }, 200, cacheHeaders(parseInt(env.CACHE_SECONDS || '0', 10)))
+      );
     }
 
-    if (req.method === "GET" && path.startsWith("pub/")) {
+    if (req.method === 'GET' && path.startsWith('pub/')) {
       const key = env.PUBLIC_PREFIX + path.slice(4);
       const can = await canRead(env, policy, key, token);
-      if (!can) return text("Unauthorized", 401);
+      if (!can) return withCors(req, text('Unauthorized', 401));
       const obj = await env.FILES.get(key);
-      return obj ? streamObj(obj) : text("Not found", 404);
+      return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
     }
 
-    if (path.startsWith("priv/")) {
+    if (path.startsWith('priv/')) {
       const key = env.RESTRICTED_PREFIX + path.slice(5);
-      if (req.method === "GET") {
-        if (!(await canRead(env, policy, key, token))) return text("Unauthorized", 401);
+      if (req.method === 'GET') {
+        if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const obj = await env.FILES.get(key);
-        return obj ? streamObj(obj) : text("Not found", 404);
+        return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
       }
-      if (req.method === "PUT") {
-        if (!(await canWrite(env, policy, key, token))) return text("Unauthorized", 401);
+      if (req.method === 'PUT') {
+        if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const put = await env.FILES.put(key, req.body, {
-          httpMetadata: { contentType: req.headers.get("content-type") || undefined },
+          httpMetadata: { contentType: req.headers.get('content-type') || undefined },
         });
-        return json({ key: put.key, etag: put.etag }, 200);
+        return withCors(req, json({ key: put.key, etag: put.etag }, 200));
       }
-      if (req.method === "DELETE") {
-        if (!(await canWrite(env, policy, key, token))) return text("Unauthorized", 401);
+      if (req.method === 'DELETE') {
+        if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         await env.FILES.delete(key);
-        return new Response(null, { status: 204 });
+        return withCors(req, new Response(null, { status: 204 }));
       }
-      return text("Method not allowed", 405);
+      return withCors(req, text('Method not allowed', 405));
     }
 
-    return text("Not found", 404);
-  }
+    return withCors(req, text('Not found', 404));
+  },
 };
