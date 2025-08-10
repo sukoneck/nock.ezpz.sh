@@ -129,7 +129,10 @@ export default {
     }
 
     if (req.method === 'GET' && path.startsWith('pub/')) {
-      const key = env.PUBLIC_PREFIX + path.slice(4);
+      const raw = path.slice(4);
+      let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
+      const key = env.PUBLIC_PREFIX + rel;
+
       const can = await canRead(env, policy, key, token);
       if (!can) return withCors(req, text('Unauthorized', 401));
       const obj = await env.FILES.get(key);
@@ -137,7 +140,10 @@ export default {
     }
 
     if (path.startsWith('priv/')) {
-      const key = env.RESTRICTED_PREFIX + path.slice(5);
+      const raw = path.slice(5);
+      let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
+      const key = env.RESTRICTED_PREFIX + rel;
+
       if (req.method === 'GET') {
         if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const obj = await env.FILES.get(key);

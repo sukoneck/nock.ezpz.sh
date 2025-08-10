@@ -125,7 +125,10 @@ ${body}`, false);
       const key = btn.getAttribute('data-key');
       if (!confirm('Delete ' + key + '?')) return;
       const path = key.startsWith('priv/') ? key.slice('priv/'.length) : key;
-      const res = await fetch(`${API}/priv/${encodeURIComponent(path)}`, { method:'DELETE', headers: authHeaders() });
+      const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+      const res = await fetch(`${API}/priv/${encodedPath}`, {
+        method:'DELETE', headers: authHeaders()
+      });
       if (!res.ok) setMsg('Delete failed: ' + (await res.text()), false);
       else $('listBtn').click();
     });
