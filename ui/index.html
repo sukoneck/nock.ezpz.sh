@@ -4,31 +4,54 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>nock files</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <style>
-    :root {
-      --maxw: 880px;
-      --pad: 1.25rem;
+    :root { --w: 860px; --gap: 10px; --pad: 14px; --radius: 8px; }
+    /* Base */
+    html,body { margin:0; padding:0; }
+    body {
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #111; background:#fff;
+      max-width: var(--w); margin: 28px auto; padding: 0 14px;
     }
-    body { max-width: var(--maxw); margin: 2rem auto; padding: 0 var(--pad); }
-    header .row, nav.row, .row { display:flex; gap:.75rem; align-items:center; }
-    input[type="password"], input[type="text"], input[type="file"], button { height: 2.25rem; }
-    #msg { white-space: pre-wrap; font-size: .9rem; color: var(--muted-color); margin:.5rem 0 1rem; }
-    table { border-collapse: separate; border-spacing:0; width:100%; overflow:hidden; border-radius:12px; }
-    thead th { font-weight:600; background: hsl(0 0% 97%); position:sticky; top:0; }
-    tbody tr:nth-child(even) { background: hsl(0 0% 98%); }
-    tbody tr:hover { background: hsl(0 0% 95%); }
-    td, th { padding:.6rem .75rem; }
-    td.size, td.time { white-space: nowrap; }
-    td.name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    td.actions a, td.actions button { font-size:.9rem; }
-    td.actions a { text-decoration: none; border-bottom: 1px dotted currentColor; }
-    td.actions button { padding:.25rem .5rem; border-radius: 8px; }
+    h2 { margin:0; font-size:18px; }
+    small, code { color:#666; }
+    /* Layout */
+    .row { display:flex; gap: var(--gap); align-items:center; }
+    header.row { margin-bottom: 14px; }
+    nav.row { margin: 8px 0 16px; }
+    /* Controls */
+    input[type="text"], input[type="password"], input[type="file"], button {
+      font: inherit; color: inherit; background:#fff;
+      border:1px solid #ccc; border-radius: var(--radius);
+      height: 34px; padding: 0 10px;
+    }
+    input[type="file"] { padding: 6px; height:auto; }
+    button { cursor:pointer; }
+    button:hover { background:#f7f7f7; }
+    /* Messages */
+    #msg { white-space: pre-wrap; font-size:13px; color:#666; margin:6px 0 12px; }
+    /* Table */
+    table { width:100%; border-collapse: collapse; }
+    thead th { text-align:left; font-weight:600; font-size:13px; color:#444; border-bottom:1px solid #ddd; padding:8px 6px; position:sticky; top:0; background:#fff; }
+    tbody td { border-bottom:1px solid #eee; padding:8px 6px; vertical-align:middle; }
+    tbody tr:hover { background:#fafafa; }
+    td.name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    td.size, td.time { white-space: nowrap; color:#444; }
+    td.actions a, td.actions button { font: inherit; }
+    td.actions a { color:#06c; text-decoration:none; border-bottom:1px dotted #06c; }
+    td.actions a:hover { text-decoration:underline; border-bottom-color:transparent; }
+    td.actions button { padding: 4px 8px; border-radius:6px; }
+    footer { margin-top: 16px; }
+    /* Dark mode */
     @media (prefers-color-scheme: dark) {
-      thead th { background: hsl(0 0% 16%); }
-      tbody tr:nth-child(even) { background: hsl(0 0% 12%); }
-      tbody tr:hover { background: hsl(0 0% 18%); }
+      body { color:#eaeaea; background:#0b0b0b; }
+      small, code, #msg { color:#aaa; }
+      input, button { background:#111; border-color:#333; color:#eaeaea; }
+      button:hover { background:#161616; }
+      thead th { background:#0b0b0b; border-bottom-color:#222; color:#bbb; }
+      tbody td { border-bottom-color:#1a1a1a; }
+      tbody tr:hover { background:#111; }
+      td.actions a { color:#7fb3ff; border-bottom-color:#7fb3ff; }
     }
   </style>
 </head>
@@ -47,7 +70,7 @@
   <article>
     <details open>
       <summary>Upload</summary>
-      <div class="row">
+      <div class="row" style="margin-top:8px">
         <input id="uploadPath" placeholder="priv/team-a/file.txt" style="flex:1" />
         <input id="fileInput" type="file" />
         <button id="uploadBtn">PUT</button>
@@ -56,7 +79,7 @@
   </article>
 
   <article>
-    <h4>Contents</h4>
+    <h4 style="margin:16px 0 6px">Contents</h4>
     <div id="msg"></div>
     <table>
       <thead>
@@ -80,10 +103,7 @@ const API = 'https://api.nock.ezpz.sh';
 const $ = (id) => document.getElementById(id);
 
 // Token persistence
-(function() {
-  const t = localStorage.getItem('token') || '';
-  $('token').value = t;
-})();
+(() => { $('token').value = localStorage.getItem('token') || ''; })();
 $('saveToken').onclick = () => localStorage.setItem('token', $('token').value.trim());
 
 function authHeaders() {
@@ -91,16 +111,10 @@ function authHeaders() {
   return t ? { 'Authorization': 'Bearer ' + t } : {};
 }
 
-function normPrefix(p) {
-  if (!p) return p;
-  if (!p.endsWith('/')) p += '/';
-  return p;
-}
+function normPrefix(p) { if (!p) return p; if (!p.endsWith('/')) p += '/'; return p; }
 
 function setMsg(text, ok=true) {
-  const el = $('msg');
-  el.textContent = text || '';
-  el.style.color = ok ? 'inherit' : 'var(--del-color, #c00)';
+  const el = $('msg'); el.textContent = text || ''; el.style.color = ok ? '' : '#c33';
 }
 
 $('listBtn').onclick = async () => {
@@ -110,14 +124,9 @@ $('listBtn').onclick = async () => {
     const url = new URL(API + '/ls');
     url.searchParams.set('prefix', prefix.replace(/^pub\//, 'pub/').replace(/^priv\//, 'priv/'));
     const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) {
-      const body = await res.text();
-      setMsg(`List failed (status ${res.status}).\n${body}`, false);
-      return;
-    }
+    if (!res.ok) { setMsg(`List failed (status ${res.status}).\n${await res.text()}`, false); return; }
     const data = await res.json();
-    const rows = $('rows'); rows.innerHTML = '';
-    setMsg('');
+    const rows = $('rows'); rows.innerHTML = ''; setMsg('');
 
     for (const d of data.directories) {
       const tr = document.createElement('tr');
@@ -128,21 +137,22 @@ $('listBtn').onclick = async () => {
       const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
       const token = $('token').value.trim();
+      const encoded = rel.split('/').map(encodeURIComponent).join('/');
       const getHref = isPub
-        ? `${API}/pub/${rel.split('/').map(encodeURIComponent).join('/')}`
-        : `${API}/priv/${rel.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
+        ? `${API}/pub/${encoded}`
+        : `${API}/priv/${encoded}?key=${encodeURIComponent(token)}`;
       const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
       const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`;
       const tr  = document.createElement('tr');
-      tr.innerHTML =
-        `<td class="name">${rel}</td>
-         <td class="size">${o.size}</td>
-         <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
-         <td class="actions">${a}${del}</td>`;
+      tr.innerHTML = `
+        <td class="name">${rel}</td>
+        <td class="size">${o.size}</td>
+        <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
+        <td class="actions">${a}${del}</td>`;
       rows.appendChild(tr);
     }
 
-    // Wire delete buttons
+    // Wire delete buttons (priv only)
     document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
       const key = btn.getAttribute('data-key');
       if (!confirm('Delete ' + key + '?')) return;
@@ -152,9 +162,7 @@ $('listBtn').onclick = async () => {
       if (!res.ok) setMsg('Delete failed: ' + (await res.text()), false);
       else $('listBtn').click();
     });
-  } catch (e) {
-    setMsg('List error: ' + (e && e.message ? e.message : e), false);
-  }
+  } catch (e) { setMsg('List error: ' + (e?.message || e), false); }
 };
 
 $('uploadBtn').onclick = async () => {
@@ -168,9 +176,7 @@ $('uploadBtn').onclick = async () => {
     });
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
     else setMsg('Uploaded');
-  } catch (e) {
-    setMsg('Upload error: ' + (e && e.message ? e.message : e), false);
-  }
+  } catch (e) { setMsg('Upload error: ' + (e?.message || e), false); }
 };
 </script>
 </body>
