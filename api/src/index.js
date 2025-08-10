@@ -24,7 +24,7 @@ function ruleForKey(policy, key) {
 async function canRead(env, policy, key, token) {
   const rule = ruleForKey(policy, key);
   if (!rule) return false;
-  if (rule.read === "anonymous") return true;
+  if (rule.read === "ANONYMOUS") return true;
   const roles = await rolesForToken(env, token);
   return rule.read.some((role) => roles.has(role));
 }

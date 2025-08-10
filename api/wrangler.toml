@@ -14,7 +14,7 @@ binding = "AUTH"
 id = "bfb2b2405536457f9d54c2a2993cb0aa"
 
 [vars]
-PUBLIC_PREFIX = "public/"
-RESTRICTED_PREFIX = "restricted/"
+PUBLIC_PREFIX = "pub/"
+RESTRICTED_PREFIX = "priv/"
 POLICY_KEY = "config/policy.json"
 CACHE_SECONDS = "60" # Useful for the website
