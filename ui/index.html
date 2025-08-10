@@ -100,15 +100,22 @@ ${body}`, false);
       rows.appendChild(tr);
     }
     for (const o of data.objects) {
-      const rel = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
+      const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
-      const getHref = isPub ? `${API}/pub/${encodeURIComponent(rel)}` : `${API}/priv/${encodeURIComponent(rel)}`;
-      const a = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
+      const token = $('token').value.trim();
+
+      const getHref = isPub
+        ? `${API}/pub/${encodeURIComponent(rel)}`
+        : `${API}/priv/${encodeURIComponent(rel)}?key=${encodeURIComponent(token)}`;
+
+      const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
       const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`; // only show delete for priv
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a}${del}</td>`;
+      const tr  = document.createElement('tr');
+      tr.innerHTML =
+        `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a}${del}</td>`;
       rows.appendChild(tr);
     }
+
 
     // Wire delete buttons (restricted only)
     document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
