@@ -144,6 +144,13 @@ export default {
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
       const key = env.RESTRICTED_PREFIX + rel;
 
+      if (req.method === 'GET' && path === 'auth/verify') {
+        const roles = await rolesForToken(env, token);
+        if (!roles.size) {
+          return withCors(req, text('Unauthorized', 401));
+        }
+        return withCors(req, json({ roles: [...roles] }, 200));
+      }
       if (req.method === 'GET') {
         if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const obj = await env.FILES.get(key);
