@@ -103,11 +103,9 @@ ${body}`, false);
       const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
       const token = $('token').value.trim();
-
       const getHref = isPub
         ? `${API}/pub/${encodeURIComponent(rel)}`
-        : `${API}/priv/${encodeURIComponent(rel)}?key=${encodeURIComponent(token)}`;
-
+        : `${API}/priv/${encodeURIComponent(o.key.slice('priv/'.length))}?key=${encodeURIComponent(token)}`;
       const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
       const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`; // only show delete for priv
       const tr  = document.createElement('tr');
