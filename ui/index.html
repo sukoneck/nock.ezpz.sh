@@ -7,10 +7,29 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <style>
-    body { max-width: 1000px; margin: 2rem auto; }
-    .row { display:flex; gap:1rem; align-items:center; }
-    code { user-select: all; }
-    #msg { white-space: pre-wrap; }
+    :root {
+      --maxw: 880px;
+      --pad: 1.25rem;
+    }
+    body { max-width: var(--maxw); margin: 2rem auto; padding: 0 var(--pad); }
+    header .row, nav.row, .row { display:flex; gap:.75rem; align-items:center; }
+    input[type="password"], input[type="text"], input[type="file"], button { height: 2.25rem; }
+    #msg { white-space: pre-wrap; font-size: .9rem; color: var(--muted-color); margin:.5rem 0 1rem; }
+    table { border-collapse: separate; border-spacing:0; width:100%; overflow:hidden; border-radius:12px; }
+    thead th { font-weight:600; background: hsl(0 0% 97%); position:sticky; top:0; }
+    tbody tr:nth-child(even) { background: hsl(0 0% 98%); }
+    tbody tr:hover { background: hsl(0 0% 95%); }
+    td, th { padding:.6rem .75rem; }
+    td.size, td.time { white-space: nowrap; }
+    td.name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    td.actions a, td.actions button { font-size:.9rem; }
+    td.actions a { text-decoration: none; border-bottom: 1px dotted currentColor; }
+    td.actions button { padding:.25rem .5rem; border-radius: 8px; }
+    @media (prefers-color-scheme: dark) {
+      thead th { background: hsl(0 0% 16%); }
+      tbody tr:nth-child(even) { background: hsl(0 0% 12%); }
+      tbody tr:hover { background: hsl(0 0% 18%); }
+    }
   </style>
 </head>
 <body>
@@ -40,7 +59,14 @@
     <h4>Contents</h4>
     <div id="msg"></div>
     <table>
-      <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
+      <thead>
+        <tr>
+          <th class="name">Name</th>
+          <th class="size">Size</th>
+          <th class="time">Uploaded</th>
+          <th class="actions">Actions</th>
+        </tr>
+      </thead>
       <tbody id="rows"></tbody>
     </table>
   </article>
@@ -86,8 +112,7 @@ $('listBtn').onclick = async () => {
     const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) {
       const body = await res.text();
-      setMsg(`List failed (status ${res.status}).
-${body}`, false);
+      setMsg(`List failed (status ${res.status}).\n${body}`, false);
       return;
     }
     const data = await res.json();
@@ -96,39 +121,34 @@ ${body}`, false);
 
     for (const d of data.directories) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td><strong>${d}</strong></td><td></td><td></td><td></td>`;
+      tr.innerHTML = `<td class="name"><strong>${d}</strong></td><td></td><td></td><td></td>`;
       rows.appendChild(tr);
     }
     for (const o of data.objects) {
       const rel   = o.key.startsWith(prefix) ? o.key.slice(prefix.length) : o.key;
       const isPub = prefix.startsWith('pub/');
       const token = $('token').value.trim();
-
-      // For priv links, strip the leading "priv/" if present (safety), then encode per segment
-      const pathRel = isPub ? rel : (o.key.startsWith('priv/') ? o.key.slice('priv/'.length) : rel);
-      const encodedPath = pathRel.split('/').map(encodeURIComponent).join('/');
-
       const getHref = isPub
-        ? `${API}/pub/${encodedPath}`
-        : `${API}/priv/${encodedPath}?key=${encodeURIComponent(token)}`;
+        ? `${API}/pub/${rel.split('/').map(encodeURIComponent).join('/')}`
+        : `${API}/priv/${rel.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
       const a   = `<a href="${getHref}" ${isPub ? '' : 'target="_blank" rel="noopener"'}>GET</a>`;
-      const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`; // only show delete for priv
+      const del = isPub ? '' : ` <button data-key="${o.key}">DEL</button>`;
       const tr  = document.createElement('tr');
       tr.innerHTML =
-        `<td>${rel}</td><td>${o.size}</td><td>${new Date(o.uploaded).toLocaleString()}</td><td>${a}${del}</td>`;
+        `<td class="name">${rel}</td>
+         <td class="size">${o.size}</td>
+         <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
+         <td class="actions">${a}${del}</td>`;
       rows.appendChild(tr);
     }
 
-
-    // Wire delete buttons (restricted only)
+    // Wire delete buttons
     document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
       const key = btn.getAttribute('data-key');
       if (!confirm('Delete ' + key + '?')) return;
       const path = key.startsWith('priv/') ? key.slice('priv/'.length) : key;
       const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-      const res = await fetch(`${API}/priv/${encodedPath}`, {
-        method:'DELETE', headers: authHeaders()
-      });
+      const res = await fetch(`${API}/priv/${encodedPath}`, { method:'DELETE', headers: authHeaders() });
       if (!res.ok) setMsg('Delete failed: ' + (await res.text()), false);
       else $('listBtn').click();
     });
@@ -143,7 +163,7 @@ $('uploadBtn').onclick = async () => {
   if (!file || !target) { alert('Pick file and target path'); return; }
   const rel = target.startsWith('priv/') ? target.slice('priv/'.length) : target;
   try {
-    const res = await fetch(`${API}/priv/${encodeURIComponent(rel)}`, {
+    const res = await fetch(`${API}/priv/${rel.split('/').map(encodeURIComponent).join('/')}`, {
       method: 'PUT', body: file, headers: { ...authHeaders(), 'Content-Type': file.type || 'application/octet-stream' }
     });
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
