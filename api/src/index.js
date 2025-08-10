@@ -106,6 +106,18 @@ function visiblePrefixesFor(policy, rolesSet) {
   return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
 }
 
+// Helper: prefixes a role set can read (read or write ⇒ read)
+function visiblePrefixesFor(policy, rolesSet) {
+  const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
+  const out = [];
+  for (const dir of policy.directories || []) {
+    const canRead = (typeof dir.read === 'string' && dir.read.toLowerCase() === 'anonymous')
+                 || has(dir.read) || has(dir.write);
+    if (canRead) out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
+  }
+  return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
+}
+
 export default {
   async fetch(req, env) {
     // CORS preflight
@@ -118,10 +130,9 @@ export default {
     const token = getToken(req);
     const policy = await loadPolicy(env);
 
-    // health
-    if (path === 'health') return withCors(req, text('ok', 200));
+    // healthz
+    if (path === 'healthz') return withCors(req, text('OK', 200));
 
-    // auth/verify (top-level)
     if (req.method === 'GET' && path === 'auth/verify') {
       const roles = await rolesForToken(env, token);
       if (!roles.size) return withCors(req, text('Unauthorized', 401));
