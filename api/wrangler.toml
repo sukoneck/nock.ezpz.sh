@@ -10,7 +10,7 @@ bucket_name = "files"
 
 [[kv_namespaces]]
 binding = "AUTH"
-id = "<KV_NAMESPACE_ID_FROM_CREATE>"
+id = "bfb2b2405536457f9d54c2a2993cb0aa"
 
 [vars]
 SITE_PREFIX = "site/"
