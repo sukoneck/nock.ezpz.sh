@@ -17,4 +17,4 @@ id = "bfb2b2405536457f9d54c2a2993cb0aa"
 PUBLIC_PREFIX = "pub/"
 RESTRICTED_PREFIX = "priv/"
 POLICY_KEY = "config/policy.json"
-CACHE_SECONDS = "60" # Useful for the website
+CACHE_SECONDS = "0"
