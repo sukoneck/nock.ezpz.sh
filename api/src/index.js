@@ -56,7 +56,9 @@ async function canRead(env, policy, key, token) {
   if (!rule) return false;
   if (isAnonymousRead(rule.read)) return true;
   const roles = await rolesForToken(env, token);
-  return Array.isArray(rule.read) && rule.read.some((role) => roles.has(role));
+  const canByRead  = Array.isArray(rule.read)  && rule.read.some((r) => roles.has(r));
+  const canByWrite = Array.isArray(rule.write) && rule.write.some((r) => roles.has(r)); // RW ⇒ read
+  return canByRead || canByWrite;
 }
 
 async function canWrite(env, policy, key, token) {
