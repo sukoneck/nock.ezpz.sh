@@ -5,23 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>nock files</title>
 <style>
+  /* ultra-stark */
   body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:900px; color:#111; background:#fff; }
   h2 { margin:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   input, button { font:inherit; border:1px solid #ccc; padding:4px 6px; background:#fff; color:#111; }
   input[type=file]{ padding:0; }
+  button { cursor:pointer; }
   #msg { font-size:13px; margin:4px 0 10px; white-space:pre-wrap; color:#444; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { border-bottom:1px solid #ddd; padding:6px 6px; text-align:left; }
   td.name { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   td.size, td.time { white-space:nowrap; }
-  td.actions a { color:#06c; text-decoration:none; }
-  td.actions a:hover { text-decoration:underline; }
   footer { margin-top:12px; font-size:12px; color:#666; }
   .hidden { display:none; }
   .invalid { outline:1px solid #c33; }
   .meta { font-size:13px; color:#444; margin:6px 0 0; }
   .meta code { background:#f7f7f7; padding:2px 4px; border:1px solid #e5e5e5; }
+  .actions button { margin-right:6px; }
 </style>
 </head>
 <body>
@@ -40,7 +41,7 @@
 <section id="app" class="hidden">
 
   <section>
-    <details>
+    <details open>
       <summary>Upload</summary>
       <div class="row" style="margin-top:4px">
         <input id="uploadPath" style="flex:1" placeholder="priv/…/file.txt" />
@@ -50,8 +51,6 @@
       <div id="writable" class="meta"></div>
     </details>
   </section>
-
-  <br />
 
   <section>
     <div id="msg"></div>
@@ -68,6 +67,7 @@
     </table>
   </section>
 
+  <footer>API: <code>https://api.nock.ezpz.sh</code></footer>
 </section>
 
 <script>
@@ -89,9 +89,16 @@ async function verifyToken(t){
 function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
 function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
 function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
+function canWriteKey(key) { return (state.writePrefixes || []).some(pref => key.startsWith(pref)); }
 
-function canWriteKey(key) {
-  return (state.writePrefixes || []).some(pref => key.startsWith(pref));
+/* human-readable sizes: 3b, 3kb, 3mb, 3gb, 3tb */
+function fmtSize(bytes){
+  if (bytes == null) return '';
+  const u = ['b','kb','mb','gb','tb'];
+  let i = 0; let n = Math.max(0, Number(bytes));
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  const val = n >= 10 || i === 0 ? Math.round(n) : Math.round(n * 10) / 10;
+  return `${val}${u[i]}`;
 }
 
 async function listAll(prefixes){
@@ -105,7 +112,7 @@ async function listAll(prefixes){
   });
   const results = await Promise.all(reqs);
   const objects = results.flatMap(r => r.objects || []);
-  objects.sort((a,b) => a.key.localeCompare(b.key)); // stable
+  objects.sort((a,b) => a.key.localeCompare(b.key));
   return objects;
 }
 
@@ -135,27 +142,43 @@ function renderTable(objects){
   if (!objects.length) { setMsg('No files.'); return; }
   setMsg('');
   for (const o of objects) {
-    const full = o.key; // show full path
+    const full = o.key;
     const href = buildGetHref(full, token);
     const delAllowed = full.startsWith('priv/') && canWriteKey(full);
-    const delBtn = delAllowed ? ` <button data-key="${full}">DEL</button>` : '';
+
     rows.insertAdjacentHTML('beforeend',
       `<tr>
         <td class="name">${full}</td>
-        <td class="size">${o.size}</td>
+        <td class="size">${fmtSize(o.size)}</td>
         <td class="time">${new Date(o.uploaded).toLocaleString()}</td>
-        <td class="actions"><a href="${href}" target="${full.startsWith('priv/') ? '_blank' : ''}">GET</a>${delBtn}</td>
+        <td class="actions">
+          <button type="button" data-get="${encodeURIComponent(full)}">GET</button>
+          ${delAllowed ? `<button type="button" data-del="${encodeURIComponent(full)}">DEL</button>` : ''}
+        </td>
       </tr>`);
+
+    // Wire per-row GET immediately to avoid later querySelectorAll passes
+    const lastRow = rows.lastElementChild;
+    const getBtn = lastRow.querySelector('button[data-get]');
+    getBtn.onclick = () => {
+      // open in new tab for priv (keeps token out of referrer); same tab for pub
+      const isPriv = full.startsWith('priv/');
+      const url = buildGetHref(full, token);
+      window.open(url, isPriv ? '_blank' : '_self');
+    };
+
+    if (delAllowed) {
+      const delBtn = lastRow.querySelector('button[data-del]');
+      delBtn.onclick = async () => {
+        if (!confirm('Delete ' + full + '?')) return;
+        const path = full.replace(/^priv\//, '');
+        const enc = path.split('/').map(encodeURIComponent).join('/');
+        const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
+        if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
+        else refreshListing(); // refresh after delete
+      };
+    }
   }
-  // wire deletes
-  document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
-    if (!confirm('Delete ' + btn.dataset.key + '?')) return;
-    const path = btn.dataset.key.replace(/^priv\//, '');
-    const enc = path.split('/').map(encodeURIComponent).join('/');
-    const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
-    if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
-    else refreshListing();
-  });
 }
 
 async function refreshListing(){
@@ -176,7 +199,7 @@ async function enterWithToken(t){
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
   renderWritable();
-  await refreshListing(); // load everything upfront
+  await refreshListing();
   return true;
 }
 
@@ -209,7 +232,7 @@ $('uploadBtn').onclick = async () => {
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
     else {
       setMsg('Uploaded');
-      await refreshListing();
+      await refreshListing(); // refresh after upload
     }
   } catch(e) { setMsg('Upload error: ' + (e?.message || e), false); }
 };
