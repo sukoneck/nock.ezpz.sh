@@ -42,9 +42,43 @@
 
   <br />
 
+  <section style="margin-bottom:16px">
+    <details>
+      <summary style="cursor:pointer;font-weight:600">Docs</summary>
+      <pre style="margin-top:8px;padding:10px;background:#f7f7f7;border:1px solid #ddd;border-radius:4px;overflow-x:auto;font-size:13px;line-height:1.4">
+    <code>
+    # Hello world
+    curl -sS "https://api.nock.ezpz.sh/pub/gm"
+
+    # List public files
+    curl -sS "https://api.nock.ezpz.sh/ls?prefix=pub/" | jq .
+
+    # Download a public file
+    curl -o latest.jam "https://api.nock.ezpz.sh/pub/file.txt"
+
+    # Download a private file (requires authentication)
+    curl -o file.txt "https://api.nock.ezpz.sh/priv/dir/file.txt"
+
+    # Upload a private file (requires authentication)
+    curl -sST file.txt "https://api.nock.ezpz.sh/priv/writable/file.txt"
+
+    # Check permissions
+    curl -sS "https://api.nock.ezpz.sh/auth/verify" | jq .
+
+    # Endpoints that require authentication may use either header:
+      -H "Authorization: Bearer YOUR_TOKEN"
+    # or query parameter:
+      ?key=YOUR_TOKEN
+    </code>
+      </pre>
+    </details>
+  </section>
+
+  <br />
+
   <section>
     <details>
-      <summary>Upload</summary>
+      <summary style="cursor:pointer;font-weight:600">Upload</summary>
       <div class="row" style="margin-top:4px">
         <input id="uploadPath" style="flex:1" placeholder="priv/…/file.txt" />
         <input id="fileInput" type="file" />
@@ -54,6 +88,7 @@
     </details>
   </section>
 
+  <br />
   <br />
 
   <section>
