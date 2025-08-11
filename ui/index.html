@@ -40,7 +40,7 @@
 <section id="app" class="hidden">
 
   <section>
-    <details open>
+    <details>
       <summary>Upload</summary>
       <div class="row" style="margin-top:4px">
         <input id="uploadPath" style="flex:1" placeholder="priv/…/file.txt" />
@@ -50,6 +50,8 @@
       <div id="writable" class="meta"></div>
     </details>
   </section>
+
+  <br />
 
   <section>
     <div id="msg"></div>
@@ -66,7 +68,6 @@
     </table>
   </section>
 
-  <footer>API: <code>https://api.nock.ezpz.sh</code></footer>
 </section>
 
 <script>
@@ -153,7 +154,7 @@ function renderTable(objects){
     const enc = path.split('/').map(encodeURIComponent).join('/');
     const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
     if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
-    else refreshListing(); // ✅ refresh after delete
+    else refreshListing();
   });
 }
 
@@ -208,7 +209,7 @@ $('uploadBtn').onclick = async () => {
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
     else {
       setMsg('Uploaded');
-      await refreshListing(); // ✅ refresh after upload
+      await refreshListing();
     }
   } catch(e) { setMsg('Upload error: ' + (e?.message || e), false); }
 };
