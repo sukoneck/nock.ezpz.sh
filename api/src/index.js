@@ -94,25 +94,12 @@ function text(msg, status = 400) {
   return new Response(msg, { status });
 }
 
-// Compute which policy prefixes a role set can read (read or write ⇒ read)
+// ---- prefix helpers (single definitions) ----
 function visiblePrefixesFor(policy, rolesSet) {
   const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
   const out = [];
   for (const dir of policy.directories || []) {
-    if (isAnonymousRead(dir.read) || has(dir.read) || has(dir.write)) {
-      out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
-    }
-  }
-  return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
-}
-
-// Helper: prefixes a role set can read (read or write ⇒ read)
-function visiblePrefixesFor(policy, rolesSet) {
-  const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
-  const out = [];
-  for (const dir of policy.directories || []) {
-    const canRead = (typeof dir.read === 'string' && dir.read.toLowerCase() === 'anonymous')
-                 || has(dir.read) || has(dir.write);
+    const canRead = isAnonymousRead(dir.read) || has(dir.read) || has(dir.write);
     if (canRead) out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
   }
   return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
@@ -125,6 +112,20 @@ function writablePrefixesFor(policy, rolesSet) {
     if (has(dir.write)) out.push(dir.prefix.endsWith('/') ? dir.prefix : dir.prefix + '/');
   }
   return [...new Set(out)].sort((a,b)=>a.localeCompare(b));
+}
+
+// ---- recursive list (no delimiter) ----
+async function listAllObjects(env, prefix) {
+  const out = [];
+  let cursor = undefined;
+  do {
+    const page = await env.FILES.list({ prefix, cursor }); // recursive
+    for (const o of page.objects) {
+      out.push({ key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag });
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return out;
 }
 
 export default {
@@ -151,22 +152,17 @@ export default {
       return withCors(req, json({ roles: [...roles], prefixes, writePrefixes }, 200));
     }
 
-    // list
+    // list (recursive)
     if (req.method === 'GET' && path === 'ls') {
       let prefix = url.searchParams.get('prefix') || '';
+      if (!prefix) return withCors(req, text('Missing prefix', 400));
+      if (!prefix.endsWith('/')) prefix += '/'; // normalize
+
+      // auth once at the requested prefix (subpaths inherit)
       const allowed = await canRead(env, policy, prefix, token);
       if (!allowed) return withCors(req, text('Unauthorized', 401));
 
-      let objects = [];
-      let cursor;
-      do {
-        const list = await env.FILES.list({ prefix, cursor }); // no delimiter
-        objects.push(...list.objects.map(o => ({
-          key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag
-        })));
-        cursor = list.cursor;
-      } while (cursor);
-
+      const objects = await listAllObjects(env, prefix);
       return withCors(req, json({ prefix, objects }, 200));
     }
 
