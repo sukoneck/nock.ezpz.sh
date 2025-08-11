@@ -86,7 +86,7 @@ function text(msg, status = 400) {
   return new Response(msg, { status });
 }
 
-// ---- prefix helpers (single definitions) ----
+// ---- prefix helpers ----
 function visiblePrefixesFor(policy, rolesSet) {
   const has = (arr) => Array.isArray(arr) && arr.some(r => rolesSet.has(r));
   const out = [];
@@ -149,25 +149,40 @@ export default {
       let prefix = url.searchParams.get('prefix') || '';
       if (!prefix) return withCors(req, text('Missing prefix', 400));
       if (!prefix.endsWith('/')) prefix += '/'; // normalize
-
-      // auth once at the requested prefix (subpaths inherit)
       const allowed = await canRead(env, policy, prefix, token);
       if (!allowed) return withCors(req, text('Unauthorized', 401));
-
       const objects = await listAllObjects(env, prefix);
       return withCors(req, json({ prefix, objects }, 200));
     }
 
-    // pub/*
-    if (req.method === 'GET' && path.startsWith('pub/')) {
+    // pub/*  — now supports GET, PUT, DELETE
+    if (path.startsWith('pub/')) {
       const raw = path.slice(4);
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
       const key = env.PUBLIC_PREFIX + rel;
 
-      const can = await canRead(env, policy, key, token);
-      if (!can) return withCors(req, text('Unauthorized', 401));
-      const obj = await env.FILES.get(key);
-      return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
+      if (req.method === 'GET') {
+        const can = await canRead(env, policy, key, token);
+        if (!can) return withCors(req, text('Unauthorized', 401));
+        const obj = await env.FILES.get(key);
+        return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
+      }
+
+      if (req.method === 'PUT') {
+        if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
+        const put = await env.FILES.put(key, req.body, {
+          httpMetadata: { contentType: req.headers.get('content-type') || undefined },
+        });
+        return withCors(req, json({ key: put.key, etag: put.etag }, 200));
+      }
+
+      if (req.method === 'DELETE') {
+        if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
+        await env.FILES.delete(key);
+        return withCors(req, new Response(null, { status: 204 }));
+      }
+
+      return withCors(req, text('Method not allowed', 405));
     }
 
     // priv/*
