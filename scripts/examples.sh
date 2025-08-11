@@ -1,3 +1,6 @@
 curl "https://api.nock.ezpz.sh/ls?prefix=pub/"
 
-curl -fSLo .keep "https://api.nock.ezpz.sh/pub/.keep"
+curl -fSLo gm.log "https://api.nock.ezpz.sh/pub/gm.log"
+
+# Hello world
+curl -fsSL "https://api.nock.ezpz.sh/pub/gm"

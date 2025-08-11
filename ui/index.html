@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>nock files</title>
 <style>
-  /* ultra-stark */
   body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:900px; color:#111; background:#fff; }
   h2 { margin:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
@@ -21,7 +20,7 @@
   footer { margin-top:12px; font-size:12px; color:#666; }
   .hidden { display:none; }
   .invalid { outline:1px solid #c33; }
-  .meta { font-size:13px; color:#444; margin:8px 0 12px; }
+  .meta { font-size:13px; color:#444; margin:6px 0 0; }
   .meta code { background:#f7f7f7; padding:2px 4px; border:1px solid #e5e5e5; }
 </style>
 </head>
@@ -39,7 +38,6 @@
 
 <!-- APP -->
 <section id="app" class="hidden">
-  <div id="meta" class="meta"></div>
 
   <section>
     <details open>
@@ -49,16 +47,16 @@
         <input id="fileInput" type="file" />
         <button id="uploadBtn">PUT</button>
       </div>
+      <div id="writable" class="meta"></div>
     </details>
   </section>
 
   <section>
-    <h4>All files you can read</h4>
     <div id="msg"></div>
     <table>
       <thead>
         <tr>
-          <th class="name">/full/path/filename</th>
+          <th class="name">File</th>
           <th class="size">Size</th>
           <th class="time">Uploaded</th>
           <th class="actions">Actions</th>
@@ -75,6 +73,8 @@
 const API = 'https://api.nock.ezpz.sh';
 const $ = id => document.getElementById(id);
 
+const state = { prefixes: [], writePrefixes: [] };
+
 /* ---------- token + gate ---------- */
 const getToken = () => (localStorage.getItem('token') || '').trim();
 const setToken = (t) => localStorage.setItem('token', (t||'').trim());
@@ -85,12 +85,12 @@ async function verifyToken(t){
   try { return await res.json(); } catch { return null; } // { roles, prefixes, writePrefixes }
 }
 
-function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
 function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
+function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
 function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
 
-function canWriteKey(key, writePrefixes) {
-  return (writePrefixes || []).some(pref => key.startsWith(pref));
+function canWriteKey(key) {
+  return (state.writePrefixes || []).some(pref => key.startsWith(pref));
 }
 
 async function listAll(prefixes){
@@ -104,21 +104,8 @@ async function listAll(prefixes){
   });
   const results = await Promise.all(reqs);
   const objects = results.flatMap(r => r.objects || []);
-  // stable sort by full key
-  objects.sort((a,b) => a.key.localeCompare(b.key));
+  objects.sort((a,b) => a.key.localeCompare(b.key)); // stable
   return objects;
-}
-
-function renderWritable(writePrefixes){
-  const el = $('meta');
-  if (!writePrefixes || !writePrefixes.length) {
-    el.textContent = 'Writable: none';
-    return;
-  }
-  el.innerHTML = `Writable: ${writePrefixes.map(p => `<code>${p}</code>`).join(' ')}`;
-  // convenience: hint the uploadPath placeholder
-  const up = $('uploadPath');
-  if (up && !up.value) up.placeholder = `${writePrefixes[0]}file.txt`;
 }
 
 function buildGetHref(key, token) {
@@ -130,11 +117,18 @@ function buildGetHref(key, token) {
     const rel = key.slice('priv/'.length);
     return `${API}/priv/${rel.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
   }
-  // fallback: treat as private path fragment
   return `${API}/priv/${key.split('/').map(encodeURIComponent).join('/')}?key=${encodeURIComponent(token)}`;
 }
 
-function renderTable(objects, writePrefixes){
+function renderWritable() {
+  const el = $('writable');
+  const list = state.writePrefixes || [];
+  if (!list.length) { el.textContent = 'Writable: none'; return; }
+  el.innerHTML = `Writable: ${list.map(p => `<code>${p}</code>`).join(' ')}`;
+  if (!$('uploadPath').value) $('uploadPath').placeholder = `${list[0]}file.txt`;
+}
+
+function renderTable(objects){
   const rows = $('rows'); rows.innerHTML = '';
   const token = getToken();
   if (!objects.length) { setMsg('No files.'); return; }
@@ -142,7 +136,7 @@ function renderTable(objects, writePrefixes){
   for (const o of objects) {
     const full = o.key; // show full path
     const href = buildGetHref(full, token);
-    const delAllowed = full.startsWith('priv/') && canWriteKey(full, writePrefixes);
+    const delAllowed = full.startsWith('priv/') && canWriteKey(full);
     const delBtn = delAllowed ? ` <button data-key="${full}">DEL</button>` : '';
     rows.insertAdjacentHTML('beforeend',
       `<tr>
@@ -152,38 +146,36 @@ function renderTable(objects, writePrefixes){
         <td class="actions"><a href="${href}" target="${full.startsWith('priv/') ? '_blank' : ''}">GET</a>${delBtn}</td>
       </tr>`);
   }
-
-  // wire deletes for allowed rows only
+  // wire deletes
   document.querySelectorAll('button[data-key]').forEach(btn => btn.onclick = async () => {
     if (!confirm('Delete ' + btn.dataset.key + '?')) return;
     const path = btn.dataset.key.replace(/^priv\//, '');
     const enc = path.split('/').map(encodeURIComponent).join('/');
     const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
     if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
-    else {
-      // optimistically remove row
-      btn.closest('tr')?.remove();
-    }
+    else refreshListing(); // ✅ refresh after delete
   });
+}
+
+async function refreshListing(){
+  try {
+    const objs = await listAll(state.prefixes);
+    renderTable(objs);
+  } catch (e) {
+    setMsg('List error: ' + (e?.message || e), false);
+  }
 }
 
 async function enterWithToken(t){
   const info = await verifyToken(t);
   if (!info) return false;
   setToken(t);
+  state.prefixes = info.prefixes || [];
+  state.writePrefixes = info.writePrefixes || [];
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
-
-  // show writable list
-  renderWritable(info.writePrefixes || []);
-
-  // fetch all readable prefixes, flat
-  try {
-    const objs = await listAll(info.prefixes || []);
-    renderTable(objs, info.writePrefixes || []);
-  } catch (e) {
-    setMsg('List error: ' + (e?.message || e), false);
-  }
+  renderWritable();
+  await refreshListing(); // load everything upfront
   return true;
 }
 
@@ -200,7 +192,7 @@ $('gateBtn').onclick = async () => {
   if (saved) await enterWithToken(saved);
 })();
 
-/* ---------- upload ---------- */
+/* ---------- upload (refresh on success) ---------- */
 $('uploadBtn').onclick = async () => {
   const file = $('fileInput').files[0];
   const target = $('uploadPath').value.trim();
@@ -214,7 +206,10 @@ $('uploadBtn').onclick = async () => {
       headers:{ ...authHeaders(), 'Content-Type': file.type || 'application/octet-stream' }
     });
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
-    else setMsg('Uploaded');
+    else {
+      setMsg('Uploaded');
+      await refreshListing(); // ✅ refresh after upload
+    }
   } catch(e) { setMsg('Upload error: ' + (e?.message || e), false); }
 };
 </script>
