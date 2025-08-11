@@ -1,16 +1,8 @@
 function corsHeaders(req) {
-  const origin = req.headers.get('Origin');
-  const allowed = new Set(['https://nock.ezpz.sh']);
   const h = new Headers();
-  if (origin && allowed.has(origin)) {
-    h.set('Access-Control-Allow-Origin', origin);
-    h.set('Vary', 'Origin');
-  } else {
-    // Non-browser clients (curl/wget) or unknown origin
-    h.set('Access-Control-Allow-Origin', '*');
-  }
-  h.set('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS');
   h.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+  h.set('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS');
+  h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Max-Age', '86400');
   return h;
 }

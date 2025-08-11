@@ -5,6 +5,9 @@ workers_dev = false
 
 routes = [ { pattern = "api.nock.ezpz.sh/*", zone_name = "ezpz.sh" } ]
 
+[assets]
+directory = "ui"
+
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "files"
