@@ -70,6 +70,8 @@
             align-self: center;
         }
 
+        code { background:#f7f7f7; padding:2px 4px; border:1px solid #e5e5e5; }
+
         .copy {
             cursor: pointer;
             padding: 0.75rem 1rem;
@@ -154,9 +156,13 @@
         <main>
             <h1>ez😌pz:nock</h1>
             <br />
-            <p>New node? Forgot to back up?<br>Download a ~recent nockchain jam.</p>
+            <p>
+                New node? Forgot to back up?
+                <br />
+                Download a ~recent nockchain jam.</p>
+            <code>nockchain --state-jam latest.jam</code>
             <div class="links-section">
-                <div class="copy" onclick="copyToClipboard(this)">curl -o $HOME/nockchain/latest.jam "https://api.nock.ezpz.sh/pub/latest.jam"</div>
+                <div class="copy" onclick="copyToClipboard(this)">curl -o latest.jam "https://api.nock.ezpz.sh/pub/latest.jam"</div>
             </div>
             <br />
             <br />
