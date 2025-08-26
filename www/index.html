@@ -59,18 +59,23 @@
             gap: 0.5rem 0.75rem;
             justify-content: center;
             align-items: start;
-            margin-top: 3rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
             max-width: fit-content;
             margin-left: auto;
             margin-right: auto;
         }
 
-        .emoji {
-            justify-self: center;
+        .left {
+            justify-self: right;
             align-self: center;
         }
 
-        code { background:#f7f7f7; padding:2px 4px; border:1px solid #e5e5e5; }
+        code {
+            background:#f7f7f7;
+            padding:2px 4px;
+            border:1px solid #e5e5e5;
+        }
 
         .copy {
             cursor: pointer;
@@ -141,7 +146,7 @@
                 display: block;
             }
 
-            .emoji {
+            .left {
                 display: none;
             }
 
@@ -156,20 +161,18 @@
         <main>
             <h1>ez😌pz:nock</h1>
             <br />
+            <p>New node? Forgot to back up?<br />Here's a Nockchain jam.</p>
             <br />
-            <br />
-            <p>
-                New node? Forgot to back up?
-                <br />
-                Download a ~recent nockchain jam.</p>
-            <code>nockchain --state-jam latest.jam</code>
             <div class="links-section">
+                <div class="left">ℹ️</div>
+                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a href="https://api.nock.ezpz.sh/pub/latest.json" target="_blank">api.nock.ezpz.sh/pub/latest.json</a></div>
+
+                <div class="left">Download</div>
                 <div class="copy" onclick="copyToClipboard(this)">curl -o latest.jam "https://api.nock.ezpz.sh/pub/latest.jam"</div>
+
+                <div class="left">Then use</div>
+                <div class="copy" onclick="copyToClipboard(this)">nockchain --state-jam latest.jam</div>
             </div>
-            <br />
-            <br />
-            <br />
-            <br />
             <br />
             <a href="https://nockblocks.com/address/31oy421QrhhShqZHGSXmtcUqYSKPgqqx1jcR5fhNe9jPDbaZRdUduB1MkEwsebDbwhrLzfhEpmraCbZ4QXky6duuZ6NNH4sNcVdfAjFwMAmVDvkwVkpCfBamC3K6vzYq6ffX" target="_blank" class="coffee-link">☕</a>
         </main>
@@ -189,6 +192,19 @@
                 console.error('Failed to copy text: ', err);
             });
         }
+
+        async function showUploaded() {
+            try {
+                const res = await fetch("https://api.nock.ezpz.sh/pub/latest.json", {
+                cache: "no-store"
+                });
+                const data = await res.json();
+                document.getElementById("uploaded").textContent = data.uploaded;
+            } catch (err) {
+                console.error("Failed to load manifest:", err);
+            }
+        }
+        showUploaded();
     </script>
 </body>
 </html>
