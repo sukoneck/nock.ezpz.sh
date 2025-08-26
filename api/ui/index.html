@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>nock files</title>
 <style>
-  /* ultra-stark */
   body { font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:20px auto; max-width:900px; color:#111; background:#fff; }
   h2 { margin:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
@@ -27,7 +26,6 @@
 </head>
 <body>
 
-<!-- SOFT GATE -->
 <section id="gate">
   <div class="row"><h2 style="flex:1">nock files</h2></div>
   <div class="row">
@@ -37,7 +35,6 @@
   <div id="gateMsg" style="font-size:13px;margin-top:6px;"></div>
 </section>
 
-<!-- APP -->
 <section id="app" class="hidden">
 
   <br />
@@ -57,10 +54,12 @@
     curl -o latest.jam "https://api.nock.ezpz.sh/pub/file.txt"
 
     # Download a private file (requires authentication)
-    curl -o file.txt "https://api.nock.ezpz.sh/priv/dir/file.txt"
+    curl -o file.txt "https://api.nock.ezpz.sh/priv/dir/file.txt" \
+      -H "Authorization: Bearer YOUR_TOKEN"
 
     # Upload a private file (requires authentication)
-    curl -sST file.txt "https://api.nock.ezpz.sh/priv/writable/file.txt"
+    curl -sST file.txt "https://api.nock.ezpz.sh/priv/writable/file.txt" \
+      -H "Authorization: Bearer YOUR_TOKEN"
 
     # Check permissions
     curl -sS "https://api.nock.ezpz.sh/auth/verify" | jq .
@@ -113,14 +112,13 @@ const $ = id => document.getElementById(id);
 
 const state = { prefixes: [], writePrefixes: [] };
 
-/* ---------- token + gate ---------- */
 const getToken = () => (localStorage.getItem('token') || '').trim();
 const setToken = (t) => localStorage.setItem('token', (t||'').trim());
 
 async function verifyToken(t){
   const res = await fetch(`${API}/auth/verify`, { headers: t ? { Authorization: 'Bearer ' + t } : {} });
   if (!res.ok) return null;
-  try { return await res.json(); } catch { return null; } // { roles, prefixes, writePrefixes }
+  try { return await res.json(); } catch { return null; }
 }
 
 function authHeaders(){ const t=getToken(); return t ? { Authorization: 'Bearer ' + t } : {}; }
@@ -128,7 +126,6 @@ function normPrefix(p){ return p && !p.endsWith('/') ? p + '/' : p; }
 function setMsg(txt, ok=true){ const el=$('msg'); el.textContent = txt || ''; el.style.color = ok ? '#444' : '#c33'; }
 function canWriteKey(key) { return (state.writePrefixes || []).some(pref => key.startsWith(pref)); }
 
-/* human-readable sizes: 3b, 3kb, 3mb, 3gb, 3tb */
 function fmtSize(bytes){
   if (bytes == null) return '';
   const u = ['b','kb','mb','gb','tb'];
@@ -144,7 +141,7 @@ async function listAll(prefixes){
     url.searchParams.set('prefix', normPrefix(p));
     return fetch(url, { headers: authHeaders() }).then(async r => {
       if (!r.ok) throw new Error(`ls ${p} → ${r.status}`);
-      return r.json(); // { prefix, objects }
+      return r.json();
     });
   });
   const results = await Promise.all(reqs);
@@ -181,7 +178,7 @@ function renderTable(objects){
   for (const o of objects) {
     const full = o.key;
     const href = buildGetHref(full, token);
-    const delAllowed = full.startsWith('priv/') && canWriteKey(full);
+    const delAllowed = canWriteKey(full);
 
     rows.insertAdjacentHTML('beforeend',
       `<tr>
@@ -194,11 +191,9 @@ function renderTable(objects){
         </td>
       </tr>`);
 
-    // Wire per-row GET immediately to avoid later querySelectorAll passes
     const lastRow = rows.lastElementChild;
     const getBtn = lastRow.querySelector('button[data-get]');
     getBtn.onclick = () => {
-      // open in new tab for priv (keeps token out of referrer); same tab for pub
       const isPriv = full.startsWith('priv/');
       const url = buildGetHref(full, token);
       window.open(url, isPriv ? '_blank' : '_self');
@@ -208,11 +203,13 @@ function renderTable(objects){
       const delBtn = lastRow.querySelector('button[data-del]');
       delBtn.onclick = async () => {
         if (!confirm('Delete ' + full + '?')) return;
-        const path = full.replace(/^priv\//, '');
-        const enc = path.split('/').map(encodeURIComponent).join('/');
-        const resDel = await fetch(`${API}/priv/${enc}`, { method:'DELETE', headers: authHeaders() });
+        const isPub = full.startsWith('pub/');
+        const path = full.replace(/^pub\//, '').replace(/^priv\//, '');
+        const enc  = path.split('/').map(encodeURIComponent).join('/');
+        const base = isPub ? 'pub' : 'priv';
+        const resDel = await fetch(`${API}/${base}/${enc}`, { method:'DELETE', headers: authHeaders() });
         if (!resDel.ok) setMsg('Delete failed: ' + (await resDel.text()), false);
-        else refreshListing(); // refresh after delete
+        else refreshListing();
       };
     }
   }
@@ -247,21 +244,21 @@ $('gateBtn').onclick = async () => {
   $('gateMsg').textContent = ok ? '' : 'Invalid token';
 };
 
-// auto-try saved token
 (async () => {
   const saved = getToken();
   if (saved) await enterWithToken(saved);
 })();
 
-/* ---------- upload (refresh on success) ---------- */
 $('uploadBtn').onclick = async () => {
   const file = $('fileInput').files[0];
   const target = $('uploadPath').value.trim();
   if (!file || !target) { alert('Pick file and target path'); return; }
-  const rel = target.replace(/^priv\//, '');
+  const isPub = target.startsWith('pub/');
+  const rel = target.replace(/^pub\//, '').replace(/^priv\//, '');
+  const enc = rel.split('/').map(encodeURIComponent).join('/');
+  const base = isPub ? 'pub' : 'priv';
   try {
-    const enc = rel.split('/').map(encodeURIComponent).join('/');
-    const res = await fetch(`${API}/priv/${enc}`, {
+    const res = await fetch(`${API}/${base}/${enc}`, {
       method:'PUT',
       body:file,
       headers:{ ...authHeaders(), 'Content-Type': file.type || 'application/octet-stream' }
@@ -269,7 +266,7 @@ $('uploadBtn').onclick = async () => {
     if (!res.ok) setMsg('Upload failed: ' + (await res.text()), false);
     else {
       setMsg('Uploaded');
-      await refreshListing(); // refresh after upload
+      await refreshListing();
     }
   } catch(e) { setMsg('Upload error: ' + (e?.message || e), false); }
 };
