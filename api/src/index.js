@@ -1,7 +1,7 @@
 function corsHeaders(req) {
   const h = new Headers();
   h.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
-  h.set('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS');
+  h.set('Access-Control-Allow-Methods', 'GET,HEAD,PUT,DELETE,OPTIONS'); // added HEAD
   h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Max-Age', '86400');
   return h;
@@ -75,7 +75,18 @@ async function streamObj(obj) {
   if (!headers.has('content-type')) headers.set('content-type', 'application/octet-stream');
   headers.set('etag', obj.etag);
   headers.set('cache-control', 'public, max-age=3600');
+  headers.set('content-length', String(obj.size)); // added
   return new Response(obj.body, { headers });
+}
+
+function metaResponseFromR2(obj) {
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/octet-stream');
+  headers.set('etag', obj.etag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('content-length', String(obj.size));
+  return new Response(null, { status: 200, headers });
 }
 
 function json(data, status = 200, headers = {}) {
@@ -155,11 +166,18 @@ export default {
       return withCors(req, json({ prefix, objects }, 200));
     }
 
-    // pub/*  — now supports GET, PUT, DELETE
+    // pub/*
     if (path.startsWith('pub/')) {
       const raw = path.slice(4);
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
       const key = env.PUBLIC_PREFIX + rel;
+
+      if (req.method === 'HEAD') {
+        const can = await canRead(env, policy, key, token);
+        if (!can) return withCors(req, text('Unauthorized', 401));
+        const obj = await env.FILES.head(key);
+        return withCors(req, obj ? metaResponseFromR2(obj) : text('Not found', 404));
+      }
 
       if (req.method === 'GET') {
         const can = await canRead(env, policy, key, token);
@@ -191,11 +209,18 @@ export default {
       let rel; try { rel = decodeURIComponent(raw); } catch { rel = raw; }
       const key = env.RESTRICTED_PREFIX + rel;
 
+      if (req.method === 'HEAD') {
+        if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
+        const obj = await env.FILES.head(key);
+        return withCors(req, obj ? metaResponseFromR2(obj) : text('Not found', 404));
+      }
+
       if (req.method === 'GET') {
         if (!(await canRead(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const obj = await env.FILES.get(key);
         return withCors(req, obj ? await streamObj(obj) : text('Not found', 404));
       }
+
       if (req.method === 'PUT') {
         if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         const put = await env.FILES.put(key, req.body, {
@@ -203,11 +228,13 @@ export default {
         });
         return withCors(req, json({ key: put.key, etag: put.etag }, 200));
       }
+
       if (req.method === 'DELETE') {
         if (!(await canWrite(env, policy, key, token))) return withCors(req, text('Unauthorized', 401));
         await env.FILES.delete(key);
         return withCors(req, new Response(null, { status: 204 }));
       }
+
       return withCors(req, text('Method not allowed', 405));
     }
 
