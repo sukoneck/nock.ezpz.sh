@@ -1,7 +1,7 @@
 function corsHeaders(req) {
   const h = new Headers();
   h.set('Access-Control-Allow-Headers', 'Authorization,Content-Type');
-  h.set('Access-Control-Allow-Methods', 'GET,HEAD,PUT,DELETE,OPTIONS'); // added HEAD
+  h.set('Access-Control-Allow-Methods', 'GET,HEAD,PUT,DELETE,OPTIONS');
   h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Max-Age', '86400');
   return h;
@@ -46,7 +46,7 @@ async function canRead(env, policy, key, token) {
   if (isAnonymousRead(rule.read)) return true;
   const roles = await rolesForToken(env, token);
   const canByRead  = Array.isArray(rule.read)  && rule.read.some((r) => roles.has(r));
-  const canByWrite = Array.isArray(rule.write) && rule.write.some((r) => roles.has(r)); // RW ⇒ read
+  const canByWrite = Array.isArray(rule.write) && rule.write.some((r) => roles.has(r));
   return canByRead || canByWrite;
 }
 
@@ -75,7 +75,7 @@ async function streamObj(obj) {
   if (!headers.has('content-type')) headers.set('content-type', 'application/octet-stream');
   headers.set('etag', obj.etag);
   headers.set('cache-control', 'public, max-age=3600');
-  headers.set('content-length', String(obj.size)); // added
+  headers.set('content-length', String(obj.size));
   return new Response(obj.body, { headers });
 }
 
