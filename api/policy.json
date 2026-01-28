@@ -1,9 +1,0 @@
-{
-  "directories": [
-    { "prefix": "priv/betabelfs/", "read": [], "write": ["SUKONECK_RW","ECCOJXM_RW", "HAMBURGER_RW"] },
-    { "prefix": "priv/eccojxm/", "read": [], "write": ["ECCOJXM_RW"] },
-    { "prefix": "priv/hamburger/", "read": [], "write": ["HAMBURGER_RW"] },
-    { "prefix": "priv/sukoneck/", "read": [], "write": ["SUKONECK_RW"] },
-    { "prefix": "pub/", "read": "ANONYMOUS", "write": ["SUKONECK_RW"] }
-  ]
-}
