@@ -3,14 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>😌</text></svg>">
-
     <title>ez😌pz:nock</title>
-
     <meta property="og:type" content="website">
     <meta property="og:title" content="ez😌pz:nock">
-
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="ez😌pz:nock">
 
@@ -165,10 +161,10 @@
             <br />
             <div class="links-section">
                 <div class="left">ℹ️</div>
-                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a href="https://api.nock.ezpz.sh/pub/latest.json" target="_blank">api.nock.ezpz.sh/pub/latest.json</a></div>
+                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a href="https://blob.ezpz.sh/pub/nock/latest.json" target="_blank">blob.ezpz.sh/pub/nock/latest.json</a></div>
 
                 <div class="left">Download</div>
-                <div class="copy" onclick="copyToClipboard(this)">curl -o latest.jam "https://api.nock.ezpz.sh/pub/latest.jam"</div>
+                <div class="copy" onclick="copyToClipboard(this)">curl -o latest.jam "https://blob.ezpz.sh/pub/nock/latest.jam"</div>
 
                 <div class="left">Then use</div>
                 <div class="copy" onclick="copyToClipboard(this)">nockchain --state-jam latest.jam</div>
@@ -184,10 +180,7 @@
 
             navigator.clipboard.writeText(text).then(() => {
                 element.classList.add('copied');
-
-                setTimeout(() => {
-                    element.classList.remove('copied');
-                }, 1000);
+                setTimeout(() => { element.classList.remove('copied'); }, 1000);
             }).catch(err => {
                 console.error('Failed to copy text: ', err);
             });
@@ -195,9 +188,7 @@
 
         async function showUploaded() {
             try {
-                const res = await fetch("https://api.nock.ezpz.sh/pub/latest.json", {
-                cache: "no-store"
-                });
+                const res = await fetch("https://blob.ezpz.sh/pub/nock/latest.json", { cache: "no-store" });
                 const data = await res.json();
                 document.getElementById("uploaded").textContent = data.uploaded;
             } catch (err) {
