@@ -161,7 +161,7 @@
             <br />
             <div class="links-section">
                 <div class="left">ℹ️</div>
-                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a id="checksum-link" href="https://blob.ezpz.sh/pub/nock/latest.json" target="_blank">blob.ezpz.sh/pub/nock/latest.json</a></div>
+                <div style="justify-self: left;">Created on <strong><span id="date">…</span></strong> with checksum here <a id="checksum-link" href="https://blob.ezpz.sh/pub/nock/latest.json" target="_blank">blob.ezpz.sh/pub/nock/latest.json</a></div>
 
                 <div class="left">Download</div>
                 <div class="copy" onclick="copyToClipboard(this)" id="download-cmd">curl -o latest.jam "https://blob.ezpz.sh/pub/nock/latest.jam"</div>
@@ -192,7 +192,7 @@
                 const data = await res.json();
                 const height = data.height;
 
-                document.getElementById("uploaded").textContent = data.uploaded;
+                document.getElementById("date").textContent = data.date;
                 document.getElementById("checksum-link").textContent = `blob.ezpz.sh/pub/nock/${height}.json`;
                 document.getElementById("checksum-link").href = `https://blob.ezpz.sh/pub/nock/${height}.json`;
                 document.getElementById("download-cmd").textContent = `curl -o ${height}.jam "https://blob.ezpz.sh/pub/nock/${height}.jam"`;
