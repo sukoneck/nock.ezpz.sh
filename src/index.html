@@ -161,13 +161,13 @@
             <br />
             <div class="links-section">
                 <div class="left">ℹ️</div>
-                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a href="https://blob.ezpz.sh/pub/nock/latest.json" target="_blank">blob.ezpz.sh/pub/nock/latest.json</a></div>
+                <div style="justify-self: left;">Created on <strong><span id="uploaded">…</span></strong> with checksum here <a id="checksum-link" href="https://blob.ezpz.sh/pub/nock/latest.json" target="_blank">blob.ezpz.sh/pub/nock/latest.json</a></div>
 
                 <div class="left">Download</div>
-                <div class="copy" onclick="copyToClipboard(this)">curl -o latest.jam "https://blob.ezpz.sh/pub/nock/latest.jam"</div>
+                <div class="copy" onclick="copyToClipboard(this)" id="download-cmd">curl -o latest.jam "https://blob.ezpz.sh/pub/nock/latest.jam"</div>
 
                 <div class="left">Then use</div>
-                <div class="copy" onclick="copyToClipboard(this)">nockchain --state-jam latest.jam</div>
+                <div class="copy" onclick="copyToClipboard(this)" id="use-cmd">nockchain --new --state-jam latest.jam</div>
             </div>
             <br />
             <a href="https://nockblocks.com/address/AcMXnpfNGPG5bVZdkGLbEnQNFzUoXdm2ZNiQKfP1jmnhx7xFqzE5SZF" target="_blank" class="coffee-link">☕</a>
@@ -190,7 +190,13 @@
             try {
                 const res = await fetch("https://blob.ezpz.sh/pub/nock/latest.json", { cache: "no-store" });
                 const data = await res.json();
+                const height = data.height;
+
                 document.getElementById("uploaded").textContent = data.uploaded;
+                document.getElementById("checksum-link").textContent = `blob.ezpz.sh/pub/nock/${height}.json`;
+                document.getElementById("checksum-link").href = `https://blob.ezpz.sh/pub/nock/${height}.json`;
+                document.getElementById("download-cmd").textContent = `curl -o ${height}.jam "https://blob.ezpz.sh/pub/nock/${height}.jam"`;
+                document.getElementById("use-cmd").textContent = `nockchain --new --state-jam ${height}.jam`;
             } catch (err) {
                 console.error("Failed to load manifest:", err);
             }
